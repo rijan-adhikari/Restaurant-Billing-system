@@ -1,0 +1,85 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app import models, schemas
+from app.deps import get_current_user, require_roles
+from app.security import hash_password
+
+router = APIRouter(prefix="/api", tags=["settings-users"])
+
+
+@router.get("/settings/tax")
+def get_tax_setting(db: Session = Depends(get_db), user=Depends(get_current_user)):
+    t = db.query(models.TaxSetting).first()
+    return {"tax_enabled": t.tax_enabled, "tax_percent": str(t.tax_percent),
+            "service_charge_enabled": t.service_charge_enabled,
+            "service_charge_percent": str(t.service_charge_percent)}
+
+
+@router.put("/settings/tax")
+def update_tax_setting(payload: schemas.TaxSettingUpdate, db: Session = Depends(get_db),
+                        user=Depends(require_roles(models.RoleName.admin))):
+    t = db.query(models.TaxSetting).first()
+    t.tax_enabled = payload.tax_enabled
+    t.tax_percent = payload.tax_percent
+    t.service_charge_enabled = payload.service_charge_enabled
+    t.service_charge_percent = payload.service_charge_percent
+    db.commit()
+    return {"ok": True}
+
+
+@router.get("/settings/restaurant")
+def get_restaurant_setting(db: Session = Depends(get_db), user=Depends(get_current_user)):
+    r = db.query(models.RestaurantSetting).first()
+    return {
+        "name": r.name, "email": r.email, "phone": r.phone, "address": r.address,
+        "pan": r.pan, "vat": r.vat, "currency": r.currency,
+        "logo_path": r.logo_path, "qr_image_path": r.qr_image_path, "receipt_footer": r.receipt_footer,
+    }
+
+
+@router.get("/users", response_model=list[schemas.UserOut])
+def list_users(db: Session = Depends(get_db), user=Depends(require_roles(models.RoleName.admin))):
+    return db.query(models.User).filter(models.User.is_active.is_(True)).all()
+
+
+@router.post("/users", response_model=schemas.UserOut)
+def create_user(payload: schemas.UserCreate, db: Session = Depends(get_db),
+                 user=Depends(require_roles(models.RoleName.admin))):
+    new_user = models.User(
+        username=payload.username, full_name=payload.full_name,
+        password_hash=hash_password(payload.password), role=payload.role,
+        must_change_password=True,
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+
+@router.patch("/users/{user_id}/password")
+def change_user_password(user_id: str, payload: schemas.PasswordUpdate, db: Session = Depends(get_db),
+                         user=Depends(require_roles(models.RoleName.admin))):
+    if len(payload.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    target = db.query(models.User).filter(models.User.id == user_id, models.User.is_active.is_(True)).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    target.password_hash = hash_password(payload.password)
+    target.must_change_password = True
+    db.commit()
+    return {"ok": True}
+
+
+@router.delete("/users/{user_id}")
+def remove_user(user_id: str, db: Session = Depends(get_db),
+               user=Depends(require_roles(models.RoleName.admin))):
+    if user_id == user.id:
+        raise HTTPException(status_code=400, detail="You cannot remove the current admin account")
+    target = db.query(models.User).filter(models.User.id == user_id, models.User.is_active.is_(True)).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    target.is_active = False
+    db.commit()
+    return {"ok": True}

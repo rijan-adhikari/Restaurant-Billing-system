@@ -1,0 +1,201 @@
+import React, { useEffect, useState } from "react";
+import { api } from "../api/client";
+
+interface OpenOrder { id: string; order_number: string; table_name: string; subtotal: string; grand_total: string; items: Array<{ name: string; quantity: number; unit_price: string; total: string }>; }
+interface Customer { id: string; name: string; phone?: string | null; }
+
+export default function Billing() {
+  const [orders, setOrders] = useState<OpenOrder[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [orderId, setOrderId] = useState("");
+  const [method, setMethod] = useState("cash");
+  const [amount, setAmount] = useState("");
+  const [discountPercent, setDiscountPercent] = useState("0");
+  const [customerId, setCustomerId] = useState("");
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [newCustomerName, setNewCustomerName] = useState("");
+  const [newCustomerPhone, setNewCustomerPhone] = useState("");
+  const [result, setResult] = useState<any>(null);
+  const [preview, setPreview] = useState<{ order: OpenOrder; discountAmount: string; grandTotal: string; amountReceived: string; remainingCredit: string } | null>(null);
+  const [error, setError] = useState("");
+
+  const loadData = async () => {
+    const [orderResponse, customerResponse] = await Promise.all([
+      api.get("/api/orders/open"),
+      api.get("/api/customers"),
+    ]);
+    setOrders(orderResponse.data);
+    setCustomers(customerResponse.data);
+  };
+
+  useEffect(() => {
+    loadData().catch(() => setError("Could not load open orders and customers."));
+  }, []);
+
+  const selectOrder = (id: string) => {
+    setOrderId(id);
+    const order = orders.find((candidate) => candidate.id === id);
+    setAmount(order?.grand_total || "");
+    setResult(null);
+    setPreview(null);
+  };
+
+  const previewBill = () => {
+    setError("");
+    const selectedOrder = orders.find((order) => order.id === orderId);
+    const percent = Number(discountPercent || 0);
+    if (!selectedOrder || percent < 0 || percent > 100) {
+      setError("Select an open order and enter a discount between 0% and 100%.");
+      return;
+    }
+    const discountAmount = (Number(selectedOrder.subtotal) * percent / 100).toFixed(2);
+    const grandTotal = (Number(selectedOrder.grand_total) - Number(discountAmount)).toFixed(2);
+    const amountReceived = method === "credit" ? 0 : Number(amount || 0);
+    if (amountReceived > Number(grandTotal)) {
+      setError("Amount received cannot exceed the preview total.");
+      return;
+    }
+    const remainingCredit = (Number(grandTotal) - amountReceived).toFixed(2);
+    if (remainingCredit !== "0.00" && !customerId) {
+      setError("Select a customer so the remaining amount can be added to Credit.");
+      return;
+    }
+    setPreview({ order: selectedOrder, discountAmount, grandTotal, amountReceived: amountReceived.toFixed(2), remainingCredit });
+  };
+
+  const addCustomer = async () => {
+    if (!newCustomerName.trim()) return;
+    try {
+      const response = await api.post("/api/customers", { name: newCustomerName, phone: newCustomerPhone || null });
+      setCustomers((current) => [...current, response.data]);
+      setCustomerId(response.data.id);
+      setNewCustomerName("");
+      setNewCustomerPhone("");
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || "Could not save customer.");
+    }
+  };
+
+  const submit = async () => {
+    setError("");
+    setResult(null);
+    try {
+      const selectedOrder = orders.find((order) => order.id === orderId);
+      if (!preview || !selectedOrder || (method !== "credit" && (!amount || Number(amount) <= 0))) {
+        setError("Preview the bill before generating it.");
+        return;
+      }
+      if (!selectedOrder || (method !== "credit" && (!amount || Number(amount) <= 0))) {
+        setError("Select an open order and enter the amount received.");
+        return;
+      }
+      if (method === "credit" && !customerId) {
+        setError("Select a customer for a credit sale.");
+        return;
+      }
+      const res = await api.post("/api/bills", {
+        order_id: orderId,
+        customer_id: customerId || null,
+        discount_percent: Number(discountPercent || 0),
+        payments: [{ method, amount: method === "credit" ? 0 : Number(amount) }],
+      });
+      setResult(res.data);
+      setPreview(null);
+      await loadData();
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || "Failed to create bill");
+    }
+  };
+
+  const selectedCustomer = customers.find((customer) => customer.id === customerId);
+  const matchingCustomers = customers.filter((customer) =>
+    `${customer.name} ${customer.phone || ""}`.toLowerCase().includes(customerSearch.toLowerCase())
+  );
+
+  const updateCustomerSearch = (value: string) => {
+    setCustomerSearch(value);
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) {
+      setCustomerId("");
+      return;
+    }
+    const exact = customers.find((customer) =>
+      [customer.name, customer.phone || ""].some((field) => field.trim().toLowerCase() === normalized)
+    );
+    if (exact) setCustomerId(exact.id);
+  };
+
+  const printBill = () => window.print();
+
+  return (
+    <div className="max-w-2xl">
+      <h1 className="text-2xl font-semibold mb-4">Billing</h1>
+      <div className="bg-white rounded-xl shadow p-5 space-y-3">
+        <label className="block text-sm font-medium">Open order</label>
+        <select className="w-full border rounded-lg px-3 py-2" value={orderId} onChange={(e) => selectOrder(e.target.value)}>
+          <option value="">Select an open order</option>
+          {orders.map((order) => <option key={order.id} value={order.id}>Table {order.table_name} - Rs. {order.grand_total}</option>)}
+        </select>
+
+        <label className="block text-sm font-medium">Payment method</label>
+          <select className="w-full border rounded-lg px-3 py-2" value={method} onChange={(e) => { setMethod(e.target.value); setPreview(null); if (e.target.value === "credit") setAmount("0"); }}>
+          <option value="cash">Cash</option><option value="card">Card</option><option value="bank_transfer">Bank Transfer</option><option value="qr">QR Payment</option><option value="credit">Credit</option>
+        </select>
+
+        <label className="block text-sm font-medium">Amount received now</label>
+          <input type="number" min="0" step="0.01" disabled={method === "credit"} className="w-full border rounded-lg px-3 py-2 disabled:bg-neutral-100" value={amount} onChange={(e) => { setAmount(e.target.value); setPreview(null); }} />
+
+        <label className="block text-sm font-medium">Discount (%)</label>
+          <input type="number" min="0" max="100" step="0.01" className="w-full border rounded-lg px-3 py-2" value={discountPercent} onChange={(e) => { setDiscountPercent(e.target.value); setPreview(null); }} />
+
+        <p className="text-xs text-neutral-500">For a partial payment, the unpaid remainder is automatically added to the selected customer&apos;s Credit account.</p>
+        <label className="block text-sm font-medium">Customer for outstanding balance</label>
+        <input className="w-full border rounded-lg px-3 py-2" placeholder="Search customer by name or phone" value={customerSearch} onChange={(e) => updateCustomerSearch(e.target.value)} />
+        {customerSearch && <div className="border rounded-lg divide-y max-h-40 overflow-y-auto">
+          {matchingCustomers.map((customer) => <button type="button" key={customer.id} onClick={() => { setCustomerId(customer.id); setCustomerSearch(customer.name); }} className={`block w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 ${customer.id === customerId ? "bg-green-50" : ""}`}><span className="font-medium">{customer.name}</span>{customer.phone && <span className="text-neutral-500"> - {customer.phone}</span>}</button>)}
+          {matchingCustomers.length === 0 && <p className="px-3 py-2 text-sm text-neutral-500">No customer found.</p>}
+        </div>}
+        {selectedCustomer && <p className="text-xs text-neutral-500">Customer ID: {selectedCustomer.id}</p>}
+
+        <div className="border-t pt-3">
+          <p className="text-sm font-medium mb-2">Add new customer</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <input className="border rounded-lg px-3 py-2" placeholder="Customer name" value={newCustomerName} onChange={(e) => setNewCustomerName(e.target.value)} />
+            <input className="border rounded-lg px-3 py-2" placeholder="Phone" value={newCustomerPhone} onChange={(e) => setNewCustomerPhone(e.target.value)} />
+          </div>
+          <button onClick={addCustomer} className="mt-2 border rounded-lg px-3 py-2 text-sm">Save customer</button>
+        </div>
+
+        <button onClick={previewBill} className="w-full border border-brand text-brand rounded-lg py-2 font-medium">Preview bill</button>
+          {preview && <div className="border-2 border-dashed border-brand/40 rounded-lg p-4 space-y-3"><div className="text-center"><img src="/images/logo.png" alt="Restaurant logo" className="mx-auto w-16 h-16 object-contain rounded-full" /><p className="font-semibold">{preview.order.order_number} - Table {preview.order.table_name}</p><p className="text-sm text-neutral-500">Preview only - not yet added to sales</p></div><div className="space-y-1 text-sm">{preview.order.items.map((item) => <div key={item.name} className="flex justify-between"><span>{item.quantity} x {item.name} (Rs. {item.unit_price})</span><span>Rs. {item.total}</span></div>)}</div><div className="border-t pt-2 text-sm space-y-1"><p className="flex justify-between"><span>Subtotal</span><span>Rs. {preview.order.subtotal}</span></p><p className="flex justify-between"><span>Discount ({discountPercent}%)</span><span>- Rs. {preview.discountAmount}</span></p><p className="flex justify-between font-semibold"><span>Total</span><span>Rs. {preview.grandTotal}</span></p><p className="flex justify-between"><span>Amount received</span><span>Rs. {preview.amountReceived}</span></p><p className="flex justify-between font-semibold text-amber-700"><span>Remaining credit</span><span>Rs. {preview.remainingCredit}</span></p><p className="flex justify-between"><span>Payment method</span><span>{method}</span></p>{selectedCustomer && <p className="flex justify-between"><span>Customer</span><span>{selectedCustomer.name}</span></p>}</div><button onClick={submit} className="w-full bg-brand text-white rounded-lg py-2 font-medium">Generate Bill and add to sales</button></div>}
+        {error && <p className="text-red-600 text-sm">{error}</p>}
+        {result && (
+          <div id="printable-bill" className="text-sm border-t pt-4 mt-2 space-y-3">
+            <div className="text-center border-b pb-3">
+              <img src="/images/logo.png" alt="Restaurant logo" className="mx-auto w-20 h-20 object-contain rounded-full mb-2" />
+              <p className="font-semibold text-lg">{result.restaurant?.name || "Restaurant"}</p>
+              <p className="text-neutral-500">{result.restaurant?.address || "Location not configured"}</p>
+              {result.restaurant?.phone && <p className="text-neutral-500">{result.restaurant.phone}</p>}
+              <p className="mt-2">Bill {result.bill_number} - Table {result.table_name}</p>
+            </div>
+            <div className="space-y-1">
+              {result.items?.map((item: { name: string; quantity: number; unit_price: string; total: string }) => (
+                <div key={item.name} className="flex justify-between"><span>{item.quantity} x {item.name} <span className="text-neutral-500">(Rs. {item.unit_price})</span></span><span>Rs. {item.total}</span></div>
+              ))}
+            </div>
+            <div className="border-t pt-2 space-y-1">
+              <p className="flex justify-between"><span>Subtotal</span><span>Rs. {result.subtotal}</span></p>
+              <p className="flex justify-between"><span>Tax</span><span>Rs. {result.tax_amount}</span></p>
+              <p className="flex justify-between"><span>Discount ({result.discount_percent || discountPercent}%)</span><span>- Rs. {result.discount_amount || "0.00"}</span></p>
+              <p className="flex justify-between font-semibold"><span>Total</span><span>Rs. {result.grand_total}</span></p>
+              <p className="flex justify-between"><span>Payment ({result.payments?.[0]?.method || method})</span><span>Rs. {result.amount_paid}</span></p>
+              <p className="flex justify-between"><span>Outstanding</span><span>Rs. {result.outstanding_amount}</span></p>
+            </div>
+            <p className="text-center text-neutral-600 pt-3">{result.restaurant?.receipt_footer || "Thankyou For Visiting Us."}</p>
+            <button type="button" onClick={printBill} className="print:hidden w-full border border-brand text-brand rounded-lg py-2 font-medium">Print bill</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
