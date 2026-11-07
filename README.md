@@ -64,3 +64,10 @@ This is the real gap list, not filler — build these before production use:
 
 ## Suggested next steps
 Tell me which of the above to build next (e.g. "build the Admin menu/floor/table management screens" or "add reports + CSV export" or "add thermal receipt printing") and I'll continue directly on this codebase.
+
+## Author
+
+Developed by **[Rijan Adhikari](https://github.com/rijan-adhikari)**.
+
+- Portfolio: https://adhikari-rijan.onrender.com/
+- GitHub: https://github.com/rijan-adhikari
