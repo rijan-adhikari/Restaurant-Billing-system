@@ -21,16 +21,21 @@ export default function Tables() {
 
   useEffect(() => {
     api.get("/api/floors").then((res) => {
-      setFloors(res.data);
-      if (res.data.length) setActiveFloor(res.data[0].id);
+      const fetchedFloors = res.data as Floor[];
+      setFloors(fetchedFloors);
+      const groundFloor = fetchedFloors.find((f) => /ground/i.test(f.name));
+      if (groundFloor) setActiveFloor(groundFloor.id);
     });
     api.get("/api/tables").then((res) => setTables(res.data));
   }, []);
 
+  const cabinTable = tables.find((t) => /cabin/i.test(t.name));
+  const groundFloor = floors.find((f) => /ground/i.test(f.name));
+
   return (
     <div>
       <h1 className="text-2xl font-semibold mb-4">Select a Table</h1>
-      <div className="flex gap-2 mb-6">
+      <div className="flex gap-2 mb-6 flex-wrap">
         {floors.map((f) => (
           <button
             key={f.id}
@@ -43,9 +48,10 @@ export default function Tables() {
           </button>
         ))}
       </div>
+
       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-4">
         {tables
-          .filter((t) => t.floor_id === activeFloor)
+          .filter((t) => t.floor_id === activeFloor && !/cabin/i.test(t.name))
           .map((t) => (
             <button
               key={t.id}
@@ -54,10 +60,21 @@ export default function Tables() {
             >
               <div className="text-lg">{t.name}</div>
               <div className="text-xs capitalize">{t.status}</div>
-              <div className="text-xs">{t.capacity} seats</div>
             </button>
           ))}
       </div>
+
+      {activeFloor === groundFloor?.id && cabinTable && (
+        <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          <button
+            onClick={() => navigate(`/pos?table=${cabinTable.id}`)}
+            className="rounded-xl border-2 border-amber-300 bg-amber-50 p-5 text-left shadow-sm hover:shadow-md transition"
+          >
+            <div className="text-xl font-semibold text-amber-900">Cabin Room</div>
+            <div className="mt-2 text-sm text-amber-800">Use this cabin for private dining and meals priced with the cabin surcharge.</div>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

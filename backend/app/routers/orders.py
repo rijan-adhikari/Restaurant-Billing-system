@@ -12,6 +12,8 @@ from app.deps import get_current_user, require_roles
 from app.websocket import manager
 
 router = APIRouter(prefix="/api", tags=["orders-kot"])
+CABIN_SURCHARGE_RATE = Decimal("0.05")
+CABIN_FEE = Decimal("500.00")
 
 
 def _next_number(prefix: str) -> str:
@@ -40,13 +42,17 @@ async def create_order(payload: schemas.OrderCreate, db: Session = Depends(get_d
         db.flush()
         table.status = models.TableStatus.occupied
 
+    is_cabin_order = "cabin" in (table.name or "").lower()
     kitchen_items, bar_items = [], []
     for line in payload.items:
         menu_item = db.query(models.MenuItem).filter(models.MenuItem.id == line.menu_item_id).first()
         if not menu_item:
             raise HTTPException(status_code=404, detail=f"Menu item {line.menu_item_id} not found")
+        unit_price = menu_item.price
+        if is_cabin_order:
+            unit_price = (menu_item.price * (Decimal("1") + CABIN_SURCHARGE_RATE)).quantize(Decimal("0.01"))
         order_item = models.OrderItem(order_id=order.id, menu_item_id=menu_item.id,
-                                       quantity=line.quantity, unit_price=menu_item.price, notes=line.notes)
+                                       quantity=line.quantity, unit_price=unit_price, notes=line.notes)
         db.add(order_item)
         db.flush()
         target = kitchen_items if menu_item.destination == models.RouteDestination.kitchen else bar_items
@@ -78,22 +84,25 @@ def list_open_orders(db: Session = Depends(get_db),
     tax_setting = db.query(models.TaxSetting).first()
     result = []
     for order in orders:
-        subtotal = sum((item.unit_price * item.quantity for item in order.items if not item.is_cancelled), 0)
-        tax = 0
+        subtotal = sum((Decimal(item.unit_price) * item.quantity for item in order.items if not item.is_cancelled), Decimal("0"))
+        if order.table and "cabin" in order.table.name.lower():
+            subtotal += CABIN_FEE
+        tax = Decimal("0")
         if tax_setting and tax_setting.tax_enabled:
-            tax = subtotal * tax_setting.tax_percent / 100
+            tax = (subtotal * Decimal(tax_setting.tax_percent) / Decimal("100")).quantize(Decimal("0.01"))
         grand_total = subtotal + tax
         result.append({
             "id": order.id,
             "order_number": order.order_number,
             "table_name": order.table.name if order.table else "",
-            "subtotal": str(subtotal),
+            "subtotal": str(subtotal.quantize(Decimal("0.01"))),
             "grand_total": str(grand_total.quantize(Decimal("0.01"))),
+            "cabin_fee": str(CABIN_FEE) if order.table and "cabin" in order.table.name.lower() else "0.00",
             "items": [{
                 "name": item.menu_item.name,
                 "quantity": item.quantity,
                 "unit_price": str(item.unit_price),
-                "total": str(item.unit_price * item.quantity),
+                "total": str(Decimal(item.unit_price) * item.quantity),
             } for item in order.items if not item.is_cancelled],
         })
     return result

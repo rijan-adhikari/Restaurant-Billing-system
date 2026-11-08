@@ -30,9 +30,17 @@ if db.query(models.Floor).count() == 0:
     db.flush()
     for i in range(1, 9):
         db.add(models.DiningTable(floor_id=ground.id, name=f"G{i}", capacity=4, sort_order=i))
+    db.add(models.DiningTable(floor_id=ground.id, name="Cabin Room", capacity=4, sort_order=0))
     for i in range(1, 8):
         db.add(models.DiningTable(floor_id=first.id, name=f"F{i}", capacity=4, sort_order=i))
-    print("Seeded 2 floors and 15 tables")
+    print("Seeded 2 floors and 16 tables including Cabin Room")
+
+cabin_table = db.query(models.DiningTable).filter(models.DiningTable.name.ilike("%cabin%")) .first()
+if not cabin_table:
+    ground = db.query(models.Floor).filter(models.Floor.name == "Ground Floor").first()
+    if ground:
+        db.add(models.DiningTable(floor_id=ground.id, name="Cabin Room", capacity=4, sort_order=0))
+        print("Created Cabin Room table for existing database")
 
 if db.query(models.Category).count() == 0:
     categories = {

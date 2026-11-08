@@ -5,10 +5,12 @@ import { api } from "../api/client";
 interface Category { id: string; name: string; }
 interface MenuItem { id: string; category_id: string; name: string; price: string; is_available: boolean; }
 interface CartLine { menu_item_id: string; name: string; price: number; quantity: number; notes: string; }
+interface TableRow { id: string; floor_id: string; name: string; status: string; capacity: number; }
 
 export default function POS() {
   const [params] = useSearchParams();
   const tableId = params.get("table") || "";
+  const [tables, setTables] = useState<TableRow[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<MenuItem[]>([]);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -18,7 +20,11 @@ export default function POS() {
   const [message, setMessage] = useState("");
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
 
+  const cabinTable = tables.find((t) => /cabin/i.test(t.name));
+  const isCabinOrder = tableId && cabinTable ? tableId === cabinTable.id : false;
+
   useEffect(() => {
+    api.get("/api/tables").then((res) => setTables(res.data));
     api.get("/api/categories").then((res) => {
       setCategories(res.data);
       if (res.data.length) setActiveCategory(res.data[0].id);
@@ -121,6 +127,14 @@ export default function POS() {
       </div>
 
       <div className="bg-white rounded-xl shadow p-4 h-fit sticky top-4">
+        <div className="mb-3">
+          {isCabinOrder && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-800">
+              Cabin Room
+            </div>
+          )}
+        </div>
+
         <h2 className="font-semibold mb-3">Current Order</h2>
         {cart.length === 0 && <p className="text-sm text-neutral-400">No items yet.</p>}
         <div className="space-y-2 mb-4">

@@ -31,6 +31,10 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
         (Decimal(i.unit_price) * i.quantity for i in order.items if not i.is_cancelled),
         Decimal("0"),
     )
+    cabin_fee = Decimal("0")
+    if order.table and "cabin" in order.table.name.lower():
+        cabin_fee = Decimal("500.00")
+        subtotal += cabin_fee
 
     tax_setting = db.query(models.TaxSetting).first()
     tax_amount = Decimal("0")
@@ -77,12 +81,27 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
     db.commit()
     db.refresh(bill)
     restaurant = db.query(models.RestaurantSetting).first()
+    bill_items = [{
+        "name": item.menu_item.name,
+        "quantity": item.quantity,
+        "unit_price": str(item.unit_price),
+        "total": str(Decimal(item.unit_price) * item.quantity),
+    } for item in order.items if not item.is_cancelled]
+    if cabin_fee > 0:
+        bill_items.append({
+            "name": "Cabin fee",
+            "quantity": 1,
+            "unit_price": "500.00",
+            "total": "500.00",
+        })
+
     return {
         "id": bill.id, "bill_number": bill.bill_number, "subtotal": str(subtotal),
         "tax_amount": str(tax_amount), "service_charge_amount": str(service_amount),
         "discount_percent": str(payload.discount_percent), "discount_amount": str(discount_amount),
         "grand_total": str(grand_total), "amount_paid": str(total_paid),
         "outstanding_amount": str(grand_total - total_paid),
+        "cabin_fee": str(cabin_fee),
         "created_at": bill.created_at,
         "restaurant": {
             "name": restaurant.name if restaurant else "",
@@ -93,12 +112,7 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
         },
         "table_name": order.table.name if order.table else "",
         "order_number": order.order_number,
-        "items": [{
-            "name": item.menu_item.name,
-            "quantity": item.quantity,
-            "unit_price": str(item.unit_price),
-            "total": str(Decimal(item.unit_price) * item.quantity),
-        } for item in order.items if not item.is_cancelled],
+        "items": bill_items,
         "payments": [{"method": p.method.value, "amount": str(p.amount)} for p in payload.payments],
     }
 
