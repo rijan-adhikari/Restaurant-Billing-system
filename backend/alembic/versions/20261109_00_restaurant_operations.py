@@ -68,6 +68,8 @@ def upgrade() -> None:
             phone VARCHAR(40), party_size INTEGER NOT NULL CHECK (party_size > 0),
             reserved_for TIMESTAMP NOT NULL, table_id UUID REFERENCES tables(id),
             status VARCHAR(20) NOT NULL DEFAULT 'booked', notes TEXT, created_at TIMESTAMP NOT NULL DEFAULT NOW())""",
+        "ALTER TABLE stock_movements DROP CONSTRAINT IF EXISTS stock_movements_movement_type_check",
+        "ALTER TABLE stock_movements ADD CONSTRAINT stock_movements_movement_type_check CHECK (movement_type IN ('opening','purchase','consumption','waste','adjustment','return','supplier_return'))",
         "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS department VARCHAR(80) NOT NULL DEFAULT 'General'",
         "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) NOT NULL DEFAULT 'paid'",
         "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS supplier_id UUID REFERENCES suppliers(id)",
