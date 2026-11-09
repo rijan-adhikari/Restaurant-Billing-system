@@ -47,6 +47,7 @@ def delete_expense(expense_id: str, db: Session = Depends(get_db),
     if not expense:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Expense not found")
+    db.add(models.AuditLog(user_id=user.id, action="expense.deleted", details=f"Deleted expense {expense.category}: {expense.description} · NPR {expense.amount}"))
     db.delete(expense)
     db.commit()
     return {"ok": True}
