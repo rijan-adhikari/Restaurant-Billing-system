@@ -4,6 +4,8 @@ import { api } from "../api/client";
 interface OpenOrder { id: string; order_number: string; table_name: string; subtotal: string; grand_total: string; tax_amount: string; tax_percent: string; service_charge_amount: string; service_charge_percent: string; cabin_fee?: string; items: Array<{ name: string; quantity: number; unit_price: string; total: string }>; }
 interface Customer { id: string; name: string; phone?: string | null; }
 
+const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+
 export default function Billing() {
   const [orders, setOrders] = useState<OpenOrder[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -49,11 +51,11 @@ export default function Billing() {
       return;
     }
     const subtotal = Number(selectedOrder.subtotal);
-    const discountAmount = (subtotal * percent / 100);
-    const taxableSubtotal = subtotal - discountAmount;
-    const taxAmount = (taxableSubtotal * Number(selectedOrder.tax_percent || 0) / 100);
-    const serviceAmount = (taxableSubtotal * Number(selectedOrder.service_charge_percent || 0) / 100);
-    const grandTotal = (taxableSubtotal + taxAmount + serviceAmount);
+    const discountAmount = roundMoney(subtotal * percent / 100);
+    const taxableSubtotal = roundMoney(subtotal - discountAmount);
+    const taxAmount = roundMoney(taxableSubtotal * Number(selectedOrder.tax_percent || 0) / 100);
+    const serviceAmount = roundMoney(taxableSubtotal * Number(selectedOrder.service_charge_percent || 0) / 100);
+    const grandTotal = roundMoney(taxableSubtotal + taxAmount + serviceAmount);
     const amountReceived = method === "credit" ? 0 : Number(amount || 0);
     if (!Number.isFinite(amountReceived) || amountReceived < 0) {
       setError("Enter a valid amount received.");
@@ -134,7 +136,7 @@ export default function Billing() {
     const exact = customers.find((customer) =>
       [customer.name, customer.phone || ""].some((field) => field.trim().toLowerCase() === normalized)
     );
-    if (exact) setCustomerId(exact.id);
+    setCustomerId(exact ? exact.id : "");
   };
 
   const printBill = () => window.print();
@@ -198,10 +200,12 @@ export default function Billing() {
             </div>
             <div className="border-t pt-2 space-y-1">
               <p className="flex justify-between"><span>Subtotal</span><span>Rs. {result.subtotal}</span></p>
-              <p className="flex justify-between"><span>Tax</span><span>Rs. {result.tax_amount}</span></p>
-              <p className="flex justify-between"><span>Discount ({result.discount_percent || discountPercent}%)</span><span>- Rs. {result.discount_amount || "0.00"}</span></p>
-              <p className="flex justify-between font-semibold"><span>Total</span><span>Rs. {result.grand_total}</span></p>
+              <p className="flex justify-between"><span>Discount ({result.discount_percent}%)</span><span>- Rs. {result.discount_amount}</span></p>
+              <p className="flex justify-between"><span>Tax ({result.tax_percent}%)</span><span>Rs. {result.tax_amount}</span></p>
+              <p className="flex justify-between"><span>Service charge ({result.service_charge_percent}%)</span><span>Rs. {result.service_charge_amount}</span></p>
+              <p className="flex justify-between border-t pt-2 font-semibold"><span>Grand total</span><span>Rs. {result.grand_total}</span></p>
               <p className="flex justify-between"><span>Payment ({result.payments?.[0]?.method || method})</span><span>Rs. {result.amount_paid}</span></p>
+              {Number(result.change_due || 0) > 0 && <p className="flex justify-between font-semibold text-emerald-700"><span>Change due</span><span>Rs. {result.change_due}</span></p>}
               <p className="flex justify-between"><span>Outstanding</span><span>Rs. {result.outstanding_amount}</span></p>
             </div>
             <p className="text-center text-neutral-600 pt-3">{result.restaurant?.receipt_footer || "Thankyou For Visiting Us."}</p>
