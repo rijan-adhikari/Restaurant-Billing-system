@@ -4,10 +4,13 @@ on:
   push:
     branches:
       - main
-      - feature/restaurant-management-suite
   pull_request:
     branches:
       - main
+
+concurrency:
+  group: royal-skye-pos-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:
