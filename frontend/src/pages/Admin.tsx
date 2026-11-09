@@ -136,9 +136,9 @@ export default function Admin() {
   };
 
   const deleteExpense = async (id: string) => {
-    if (!window.confirm("Delete this expense?")) return;
-    await api.delete(`/api/expenses/${id}`);
-    await load();
+    if (!window.confirm("Delete this expense? This action is recorded in the audit log.")) return;
+    try { await api.delete(`/api/expenses/${id}`); setMessage("Expense deleted."); await load(); }
+    catch (e: any) { setError(e?.response?.data?.detail || "Could not delete expense."); }
   };
 
 
@@ -176,8 +176,8 @@ export default function Admin() {
   };
 
   const changePassword = async (userId: string) => {
-    if (newPassword.length < 6) {
-      setError("Password must be at least 6 characters.");
+    if (newPassword.length < 8) {
+      setError("Password must be at least 8 characters.");
       return;
     }
     try {
@@ -301,19 +301,19 @@ export default function Admin() {
         <h2 className="font-semibold mb-4">{t("Staff accounts")}</h2>
         <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
           <form onSubmit={addStaff} className="space-y-3">
-            <input required placeholder="Username" className="w-full border rounded-lg px-3 py-2" value={staffForm.username} onChange={(e) => setStaffForm({ ...staffForm, username: e.target.value })} />
-            <input required placeholder="Full name" className="w-full border rounded-lg px-3 py-2" value={staffForm.full_name} onChange={(e) => setStaffForm({ ...staffForm, full_name: e.target.value })} />
-            <input required minLength={8} type="password" placeholder="Temporary password (8+ characters)" className="w-full border rounded-lg px-3 py-2" value={staffForm.password} onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })} />
+            <input required placeholder={t("Username")} className="w-full border rounded-lg px-3 py-2" value={staffForm.username} onChange={(e) => setStaffForm({ ...staffForm, username: e.target.value })} />
+            <input required placeholder={t("Full name")} className="w-full border rounded-lg px-3 py-2" value={staffForm.full_name} onChange={(e) => setStaffForm({ ...staffForm, full_name: e.target.value })} />
+            <input required minLength={8} type="password" placeholder={t("Temporary password (8+ characters)")} className="w-full border rounded-lg px-3 py-2" value={staffForm.password} onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })} />
             <select className="w-full border rounded-lg px-3 py-2" value={staffForm.role} onChange={(e) => setStaffForm({ ...staffForm, role: e.target.value })}>
               {staffRoles.map((role) => <option key={role} value={role}>{role[0].toUpperCase() + role.slice(1)}</option>)}
             </select>
-            <button type="submit" className="bg-brand text-white rounded-lg px-4 py-2 font-medium">Add staff account</button>
-            {createdCredentials && <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm"><p className="font-medium">Temporary login</p><p>Username: {createdCredentials.username}</p><p>Password: {createdCredentials.password}</p><p className="text-xs text-amber-800 mt-1">This password is shown once and is not stored for display.</p></div>}
+            <button type="submit" className="bg-brand text-white rounded-lg px-4 py-2 font-medium">{t("Add staff account")}</button>
+            {createdCredentials && <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm"><p className="font-medium">{t("Temporary login")}</p><p>Username: {createdCredentials.username}</p><p>Password: {createdCredentials.password}</p><p className="text-xs text-amber-800 mt-1">This password is shown once and is not stored for display.</p></div>}
           </form>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr className="text-left border-b"><th className="py-2">Name</th><th>Username</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead>
-              <tbody>{staff.map((member) => <tr key={member.id} className="border-b last:border-0"><td className="py-2">{member.full_name}</td><td>{member.username}</td><td><select className="border rounded px-2 py-1 capitalize" value={member.role} onChange={(e) => updateStaff(member.id, { role: e.target.value })}>{staffRoles.map((role) => <option key={role} value={role}>{role}</option>)}</select></td><td><button type="button" onClick={() => updateStaff(member.id, { is_active: !member.is_active })} className={member.is_active ? "text-emerald-700" : "text-red-700"}>{member.is_active ? "Active · disable" : "Inactive · enable"}</button></td><td><div className="flex gap-2"><button type="button" onClick={() => { setPasswordUserId(member.id); setNewPassword(""); }} className="text-brand">Change password</button><button type="button" onClick={() => removeStaff(member.id)} className="text-red-700">Disable</button></div>{passwordUserId === member.id && <div className="flex gap-2 mt-2"><input type="password" minLength={6} placeholder="New password" className="border rounded px-2 py-1" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /><button type="button" onClick={() => changePassword(member.id)} className="bg-brand text-white rounded px-2 py-1">Save</button></div>}</td></tr>)}</tbody>
+              <thead><tr className="text-left border-b"><th className="py-2">Name</th><th>Username</th><th>Role</th><th>{t("Status")}</th><th>Actions</th></tr></thead>
+              <tbody>{staff.map((member) => <tr key={member.id} className="border-b last:border-0"><td className="py-2">{member.full_name}</td><td>{member.username}</td><td><select className="border rounded px-2 py-1 capitalize" value={member.role} onChange={(e) => updateStaff(member.id, { role: e.target.value })}>{staffRoles.map((role) => <option key={role} value={role}>{role}</option>)}</select></td><td><button type="button" onClick={() => updateStaff(member.id, { is_active: !member.is_active })} className={member.is_active ? "text-emerald-700" : "text-red-700"}>{member.is_active ? "Active · disable" : "Inactive · enable"}</button></td><td><div className="flex gap-2"><button type="button" onClick={() => { setPasswordUserId(member.id); setNewPassword(""); }} className="text-brand">{t("Change password")}</button><button type="button" onClick={() => removeStaff(member.id)} className="text-red-700">{t("Disable")}</button></div>{passwordUserId === member.id && <div className="flex gap-2 mt-2"><input type="password" minLength={8} placeholder={t("New password")} className="border rounded px-2 py-1" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /><button type="button" onClick={() => changePassword(member.id)} className="bg-brand text-white rounded px-2 py-1">{t("Save")}</button></div>}</td></tr>)}</tbody>
             </table>
           </div>
         </div>
@@ -323,19 +323,19 @@ export default function Admin() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold">{t("Food menu")}</h2>
           <button type="button" onClick={() => setShowMenu((current) => !current)} className="border rounded-lg px-3 py-1.5 text-sm">
-            {showMenu ? "Hide food menu" : "Show food menu"}
+            {showMenu ? t("Hide food menu") : t("Show food menu")}
           </button>
         </div>
         {showMenu && <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr className="text-left border-b"><th className="py-2">Food</th><th>Category</th><th>Price</th><th>Status</th><th /></tr></thead>
+            <thead><tr className="text-left border-b"><th className="py-2">{t("Food")}</th><th>{t("Category")}</th><th>{t("Price (NPR)")}</th><th>Status</th><th /></tr></thead>
             <tbody>
               {items.map((item) => (
                 <tr key={item.id} className="border-b last:border-0">
                   <td className="py-3"><div className="font-medium">{item.name}</div><div className="text-xs text-neutral-500">{item.destination}</div></td>
                   <td>{categories.find((category) => category.id === item.category_id)?.name || "-"}</td>
                   <td><div className="flex items-center gap-2"><input type="number" min="0" step="0.01" className="w-24 border rounded px-2 py-1" value={priceDrafts[item.id] ?? item.price} onChange={(e) => setPriceDrafts((current) => ({ ...current, [item.id]: e.target.value }))} /><button type="button" onClick={() => savePrice(item)} className="text-brand font-medium">Save</button></div></td>
-                  <td><span className={item.is_available ? "text-green-700" : "text-neutral-400"}>{item.is_available ? "Available" : "Unavailable"}</span></td>
+                  <td><span className={item.is_available ? "text-green-700" : "text-neutral-400"}>{item.is_available ? t("Available") : t("Unavailable")}</span></td>
                   <td className="text-right"><div className="flex justify-end gap-3"><button onClick={() => edit(item)} className="text-brand font-medium">{t("Edit")}</button><button type="button" onClick={() => deleteMenuItem(item)} className="text-red-700 font-medium">{t("Delete")}</button></div></td>
                 </tr>
               ))}
@@ -362,14 +362,14 @@ export default function Admin() {
       <section className="order-last bg-white rounded-xl shadow p-5">
         <h2 className="font-semibold mb-4">{editingId ? t("Edit food item") : t("Add food item")}</h2>
         <form onSubmit={save} className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 items-end">
-          <label className="block text-sm font-medium">Category<select required className="w-full border rounded-lg px-3 py-2 mt-1" value={form.category_id} onChange={(e) => updateForm("category_id", e.target.value)}><option value="">Select category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
-          <div className="flex gap-2"><input className="min-w-0 flex-1 border rounded-lg px-3 py-2" placeholder="New category name" value={categoryName} onChange={(e) => setCategoryName(e.target.value)} /><button type="button" onClick={addCategory} className="border border-brand text-brand rounded-lg px-3 py-2 text-sm">Add category</button></div><div className="md:col-span-2 flex flex-wrap gap-2">{categories.map((category) => <span key={category.id} className="inline-flex items-center gap-2 rounded-lg bg-neutral-100 px-3 py-1.5 text-xs">{category.name}<button type="button" aria-label={`Delete ${category.name}`} onClick={() => deleteCategory(category)} className="font-bold text-red-700">×</button></span>)}</div>
-          <label className="block text-sm font-medium">Food name<input required className="w-full border rounded-lg px-3 py-2 mt-1" value={form.name} onChange={(e) => updateForm("name", e.target.value)} /></label>
-          <label className="block text-sm font-medium">Description<textarea className="w-full border rounded-lg px-3 py-2 mt-1" value={form.description} onChange={(e) => updateForm("description", e.target.value)} /></label>
-          <label className="block text-sm font-medium">Price (NPR)<input required min="0" step="0.01" type="number" className="w-full border rounded-lg px-3 py-2 mt-1" value={form.price} onChange={(e) => updateForm("price", e.target.value)} /></label>
-          <label className="block text-sm font-medium">Send order to<select className="w-full border rounded-lg px-3 py-2 mt-1" value={form.destination} onChange={(e) => updateForm("destination", e.target.value)}><option value="kitchen">Kitchen</option><option value="bar">Bar</option></select></label>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.is_available} onChange={(e) => updateForm("is_available", e.target.checked)} /> Available for POS orders</label>
-          <div className="flex gap-2"><button type="submit" className="bg-brand text-white rounded-lg py-2 px-5 font-medium">{editingId ? "Save changes" : "Add food"}</button>{editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ ...emptyForm, category_id: categories[0]?.id || "" }); }} className="px-3 border rounded-lg">Cancel</button>}</div>
+          <label className="block text-sm font-medium">{t("Category")}<select required className="w-full border rounded-lg px-3 py-2 mt-1" value={form.category_id} onChange={(e) => updateForm("category_id", e.target.value)}><option value="">{t("Select category")}</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+          <div className="flex gap-2"><input className="min-w-0 flex-1 border rounded-lg px-3 py-2" placeholder={t("New category name")} value={categoryName} onChange={(e) => setCategoryName(e.target.value)} /><button type="button" onClick={addCategory} className="border border-brand text-brand rounded-lg px-3 py-2 text-sm">{t("Add category")}</button></div><div className="md:col-span-2 flex flex-wrap gap-2">{categories.map((category) => <span key={category.id} className="inline-flex items-center gap-2 rounded-lg bg-neutral-100 px-3 py-1.5 text-xs">{category.name}<button type="button" aria-label={`Delete ${category.name}`} onClick={() => deleteCategory(category)} className="font-bold text-red-700">×</button></span>)}</div>
+          <label className="block text-sm font-medium">{t("Food name")}<input required className="w-full border rounded-lg px-3 py-2 mt-1" value={form.name} onChange={(e) => updateForm("name", e.target.value)} /></label>
+          <label className="block text-sm font-medium">{t("Description")}<textarea className="w-full border rounded-lg px-3 py-2 mt-1" value={form.description} onChange={(e) => updateForm("description", e.target.value)} /></label>
+          <label className="block text-sm font-medium">{t("Price (NPR)")}<input required min="0" step="0.01" type="number" className="w-full border rounded-lg px-3 py-2 mt-1" value={form.price} onChange={(e) => updateForm("price", e.target.value)} /></label>
+          <label className="block text-sm font-medium">{t("Send order to")}<select className="w-full border rounded-lg px-3 py-2 mt-1" value={form.destination} onChange={(e) => updateForm("destination", e.target.value)}><option value="kitchen">Kitchen</option><option value="bar">Bar</option></select></label>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.is_available} onChange={(e) => updateForm("is_available", e.target.checked)} /> {t("Available for POS orders")}</label>
+          <div className="flex gap-2"><button type="submit" className="bg-brand text-white rounded-lg py-2 px-5 font-medium">{editingId ? t("Save changes") : t("Add food")}</button>{editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ ...emptyForm, category_id: categories[0]?.id || "" }); }} className="px-3 border rounded-lg">{t("Cancel")}</button>}</div>
         </form>
         {message && <p className="text-sm text-green-700 mt-3">{message}</p>}
         {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
@@ -382,17 +382,17 @@ export default function Admin() {
 
       <section className="bg-white rounded-xl shadow p-5">
         <h2 className="font-semibold mb-1">{t("Customer history")}</h2>
-        <p className="text-sm text-neutral-500 mb-4">See what each customer ordered and spent during a selected date range.</p>
+        <p className="text-sm text-neutral-500 mb-4">{t("See what each customer ordered and spent during a selected date range.")}</p>
         <div className="grid gap-3 md:grid-cols-4 items-end">
           <label className="text-sm">Customer
             <select className="w-full border rounded-lg px-3 py-2 mt-1" value={historyCustomerId} onChange={(e) => setHistoryCustomerId(e.target.value)}>
-              <option value="">All customers</option>
+              <option value="">{t("All customers")}</option>
               {customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}{customer.phone ? ` - ${customer.phone}` : ""}</option>)}
             </select>
           </label>
-          <label className="text-sm">From date<input type="date" className="w-full border rounded-lg px-3 py-2 mt-1" value={historyFrom} onChange={(e) => setHistoryFrom(e.target.value)} /></label>
-          <label className="text-sm">To date<input type="date" className="w-full border rounded-lg px-3 py-2 mt-1" value={historyTo} onChange={(e) => setHistoryTo(e.target.value)} /></label>
-          <button type="button" onClick={searchHistory} className="bg-brand text-white rounded-lg px-4 py-2 font-medium">{historyLoading ? "Loading..." : "Search history"}</button>
+          <label className="text-sm">{t("From date")}<input type="date" className="w-full border rounded-lg px-3 py-2 mt-1" value={historyFrom} onChange={(e) => setHistoryFrom(e.target.value)} /></label>
+          <label className="text-sm">{t("To date")}<input type="date" className="w-full border rounded-lg px-3 py-2 mt-1" value={historyTo} onChange={(e) => setHistoryTo(e.target.value)} /></label>
+          <button type="button" onClick={searchHistory} className="bg-brand text-white rounded-lg px-4 py-2 font-medium">{historyLoading ? t("Loading...") : t("Search history")}</button>
         </div>
         <div className="mt-5 space-y-4">
           {history.map((customer) => (
