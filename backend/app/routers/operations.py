@@ -345,11 +345,14 @@ def save_recipe(payload: RecipeUpdate, db: Session = Depends(get_db), user=Depen
         yield_quantity=EXCLUDED.yield_quantity,instructions=EXCLUDED.instructions,updated_at=NOW() RETURNING id"""),
         {"menu": payload.menu_item_id, "yield": payload.yield_quantity, "instructions": payload.instructions}).first()
     db.execute(text("DELETE FROM recipe_items WHERE recipe_id=:id"), {"id": recipe.id})
+    ingredient_quantities: dict[str, Decimal] = {}
     for line in payload.items:
+        ingredient_quantities[line.item_id] = ingredient_quantities.get(line.item_id, Decimal("0")) + line.quantity
+    for item_id, quantity in ingredient_quantities.items():
         db.execute(text("INSERT INTO recipe_items(recipe_id,item_id,quantity) VALUES(:recipe,:item,:qty)"),
-                   {"recipe": recipe.id, "item": line.item_id, "qty": line.quantity})
+                   {"recipe": recipe.id, "item": item_id, "qty": quantity})
     db.commit()
-    return {"id": recipe.id, "ingredients": len(payload.items)}
+    return {"id": recipe.id, "ingredients": len(ingredient_quantities)}
 
 
 @router.get("/expenses")
