@@ -4,7 +4,8 @@ import { api } from "../api/client";
 type Tab = "cash" | "refunds" | "suppliers" | "loyalty" | "reports" | "audit" | "settings";
 const tabs: { id: Tab; label: string }[] = [
   { id: "cash", label: "Cash drawer" }, { id: "refunds", label: "Refunds" },
-  { id: "suppliers", label: "Supplier ledger" }, { id: "loyalty", label: "Loyalty" },\n  { id: "reports", label: "Reports & exports" },
+  { id: "suppliers", label: "Supplier ledger" }, { id: "loyalty", label: "Loyalty" },
+  { id: "reports", label: "Reports & exports" },
   { id: "audit", label: "Audit trail" }, { id: "settings", label: "Business settings" },
 ];
 const field = "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm";
