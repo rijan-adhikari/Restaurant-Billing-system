@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional, List
+from typing import Optional, List, Literal
 
 from pydantic import BaseModel
 
@@ -122,7 +122,12 @@ class OrderItemCreate(BaseModel):
 
 
 class OrderCreate(BaseModel):
-    table_id: str
+    table_id: Optional[str] = None
+    service_type: Literal["dine_in", "takeaway", "delivery"] = "dine_in"
+    customer_name: Optional[str] = None
+    phone: Optional[str] = None
+    delivery_address: Optional[str] = None
+    delivery_fee: Decimal = Decimal("0")
     items: List[OrderItemCreate]
 
 
