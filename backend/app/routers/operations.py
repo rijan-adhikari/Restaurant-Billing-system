@@ -310,6 +310,10 @@ def create_purchase(payload: PurchaseCreate, db: Session = Depends(get_db), user
             VALUES(:item,'purchase',:qty,:cost,:ref,:user)"""),
             {"item": line.item_id, "qty": line.quantity, "cost": line.unit_cost, "ref": number, "user": user.id})
     db.execute(text("UPDATE purchase_orders SET received_at=NOW() WHERE id=:id"), {"id": po["id"]})
+    db.execute(text("""INSERT INTO supplier_ledger(supplier_id,entry_type,amount,reference,notes,created_by)
+        VALUES(:supplier,'purchase',:amount,:reference,:notes,:user)"""),
+        {"supplier": payload.supplier_id, "amount": total, "reference": number,
+         "notes": "Stock purchase received", "user": user.id})
     db.commit()
     return {"id": po["id"], "order_number": number, "status": "received", "subtotal": str(total)}
 
