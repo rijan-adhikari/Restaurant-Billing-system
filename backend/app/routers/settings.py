@@ -49,6 +49,7 @@ def update_tax_setting(payload: schemas.TaxSettingUpdate, db: Session = Depends(
     t.tax_percent = payload.tax_percent
     t.service_charge_enabled = payload.service_charge_enabled
     t.service_charge_percent = payload.service_charge_percent
+    db.add(models.AuditLog(user_id=user.id, action="settings.tax.update", details=f"VAT enabled={payload.tax_enabled}, rate={payload.tax_percent}%, service charge enabled={payload.service_charge_enabled}, rate={payload.service_charge_percent}%"))
     db.commit()
     return {"ok": True}
 
@@ -72,6 +73,7 @@ def update_restaurant_setting(payload: RestaurantSettingsUpdate, db: Session = D
         db.add(setting)
     for key, value in payload.model_dump().items():
         setattr(setting, key, value.strip() if isinstance(value, str) else value)
+    db.add(models.AuditLog(user_id=user.id, action="settings.restaurant.update", details=f"Restaurant profile updated: {setting.name}"))
     db.commit()
     return {"ok": True}
 
@@ -90,6 +92,8 @@ def create_user(payload: schemas.UserCreate, db: Session = Depends(get_db),
         must_change_password=True,
     )
     db.add(new_user)
+    db.flush()
+    db.add(models.AuditLog(user_id=user.id, action="user.create", details=f"Created {new_user.username} with role {new_user.role.value}"))
     db.commit()
     db.refresh(new_user)
     return new_user
@@ -129,6 +133,7 @@ def change_user_password(user_id: str, payload: schemas.PasswordUpdate, db: Sess
         raise HTTPException(status_code=404, detail="User not found")
     target.password_hash = hash_password(payload.password)
     target.must_change_password = True
+    db.add(models.AuditLog(user_id=user.id, action="user.password.reset", details=f"Reset password for {target.username}"))
     db.commit()
     return {"ok": True}
 
@@ -142,5 +147,6 @@ def remove_user(user_id: str, db: Session = Depends(get_db),
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     target.is_active = False
+    db.add(models.AuditLog(user_id=user.id, action="user.disable", details=f"Disabled account {target.username}"))
     db.commit()
     return {"ok": True}
