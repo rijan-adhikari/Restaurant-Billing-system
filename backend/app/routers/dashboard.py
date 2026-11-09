@@ -58,6 +58,18 @@ def dashboard_summary(report_date: date | None = None, db: Session = Depends(get
     daily_expenses = _sum_amount(db, models.Expense, models.Expense.amount, daily_start, daily_end, models.Expense.expense_date)
     monthly_expenses = _sum_amount(db, models.Expense, models.Expense.amount, month_start, month_end, models.Expense.expense_date)
     yearly_expenses = _sum_amount(db, models.Expense, models.Expense.amount, year_start, year_end, models.Expense.expense_date)
+    def payroll_cost(start: datetime, end: datetime):
+        return db.execute(text("""SELECT COALESCE(SUM(gross_pay),0) FROM payroll_entries
+            WHERE period_end >= :start_date AND period_end < :end_date"""),
+            {"start_date": start.date(), "end_date": end.date()}).scalar_one()
+
+    daily_payroll = payroll_cost(daily_start, daily_end)
+    monthly_payroll = payroll_cost(month_start, month_end)
+    yearly_payroll = payroll_cost(year_start, year_end)
+    daily_expenses += daily_payroll
+    monthly_expenses += monthly_payroll
+    yearly_expenses += yearly_payroll
+
     outstanding = db.query(func.coalesce(func.sum(models.CustomerBalance.remaining_amount), 0)).filter(
         models.CustomerBalance.remaining_amount > 0
     ).scalar()
@@ -76,6 +88,8 @@ def dashboard_summary(report_date: date | None = None, db: Session = Depends(get
         "yearly_profit": str(yearly_sales - yearly_cogs - yearly_expenses),
         "daily_estimated_cogs": str(daily_cogs), "monthly_estimated_cogs": str(monthly_cogs),
         "yearly_estimated_cogs": str(yearly_cogs),
+        "daily_payroll_expense": str(daily_payroll), "monthly_payroll_expense": str(monthly_payroll),
+        "yearly_payroll_expense": str(yearly_payroll),
         "outstanding": str(outstanding),
         "pending_kots": pending_kots,
         "occupied_tables": occupied_tables,
