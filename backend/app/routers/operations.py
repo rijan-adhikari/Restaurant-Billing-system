@@ -372,9 +372,10 @@ def profit_loss(start: date = Query(default_factory=lambda: date.today().replace
     if end < start:
         raise HTTPException(422, "End date must not be before start date")
     sales = db.execute(text("""SELECT COALESCE(SUM(grand_total),0) total,
-        COALESCE(SUM(discount_amount),0) discounts,COALESCE(SUM(tax_amount),0) tax,
-        COALESCE(SUM(service_charge_amount),0) service_charge,COUNT(*) bill_count
-        FROM bills WHERE created_at::date BETWEEN :start AND :end"""), {"start": start, "end": end}).mappings().one()
+        COALESCE(SUM(subtotal),0) gross_sales, COALESCE(SUM(discount_amount),0) discounts,
+        COALESCE(SUM(tax_amount),0) tax, COALESCE(SUM(service_charge_amount),0) service_charge,
+        COUNT(*) bill_count FROM bills WHERE created_at::date BETWEEN :start AND :end"""),
+        {"start": start, "end": end}).mappings().one()
     expenses = db.execute(text("""SELECT COALESCE(SUM(amount),0) total,
         COALESCE(json_agg(json_build_object('category',category,'amount',amount,'department',department)),'[]'::json) breakdown
         FROM expenses WHERE expense_date::date BETWEEN :start AND :end"""), {"start": start, "end": end}).mappings().one()
@@ -383,11 +384,14 @@ def profit_loss(start: date = Query(default_factory=lambda: date.today().replace
         JOIN recipes r ON r.menu_item_id=oi.menu_item_id JOIN recipe_items ri ON ri.recipe_id=r.id
         JOIN inventory_items i ON i.id=ri.item_id WHERE b.created_at::date BETWEEN :start AND :end"""),
         {"start": start, "end": end}).scalar_one()
-    net_sales = Decimal(str(sales["total"])) - Decimal(str(sales["discounts"]))
+    # Bill grand_total already has discounts deducted and tax/service added.
+    # Revenue excludes tax collected; do not subtract the discount a second time.
+    net_sales = Decimal(str(sales["gross_sales"])) - Decimal(str(sales["discounts"]))
     gross_profit = net_sales - Decimal(str(cogs))
     operating_profit = gross_profit - Decimal(str(expenses["total"]))
     return {"period": {"start": start, "end": end}, "bill_count": sales["bill_count"],
-        "gross_billed": str(sales["total"]), "discounts": str(sales["discounts"]), "tax_collected": str(sales["tax"]),
+        "gross_billed": str(sales["total"]), "gross_sales_before_discount": str(sales["gross_sales"]),
+        "discounts": str(sales["discounts"]), "tax_collected": str(sales["tax"]),
         "service_charge": str(sales["service_charge"]), "net_sales": str(net_sales),
         "cost_of_goods_sold_estimate": str(cogs), "gross_profit_estimate": str(gross_profit),
         "operating_expenses": str(expenses["total"]), "operating_profit_estimate": str(operating_profit),
