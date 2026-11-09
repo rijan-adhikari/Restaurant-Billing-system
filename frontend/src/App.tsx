@@ -29,19 +29,19 @@ function Shell({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className="min-h-screen flex">
-      <aside className="w-56 bg-brand-dark text-white flex flex-col p-4">
+    <div className="min-h-screen flex flex-col md:flex-row bg-[#f5f6f8]">
+      <aside className="w-full md:w-60 md:min-h-screen bg-brand-dark text-white flex flex-col p-4 md:p-5 shadow-xl md:sticky md:top-0 md:self-start">
         <div className="flex items-center gap-2 font-semibold mb-1">
           {logoAvailable && <img src="/images/logo.png" alt="" className="w-8 h-8 object-contain rounded-full" onError={() => setLogoAvailable(false)} />}
           <span>Royal Skye Birds</span>
         </div>
-        <div className="text-xs text-white/60 mb-6">{fullName} - {role}</div>
-        <nav className="flex-1 space-y-1">
+        <div className="text-xs text-white/60 mb-4 md:mb-7">{fullName} · <span className="capitalize">{role}</span></div>
+        <nav className="flex flex-row md:flex-col gap-1 overflow-x-auto md:overflow-visible flex-1">
           {nav.map((n) => (
             <Link
               key={n.to}
               to={n.to}
-              className={`block px-3 py-2 rounded-lg text-sm ${
+              className={`shrink-0 px-3 py-2.5 rounded-xl text-sm transition-colors ${
                 location.pathname === n.to ? "bg-white/10" : "hover:bg-white/5"
               }`}
             >
@@ -49,14 +49,14 @@ function Shell({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
         </nav>
-        <button onClick={logout} className="text-sm text-white/70 hover:text-white text-left">
+        <button onClick={logout} className="mt-3 md:mt-6 shrink-0 rounded-xl border border-white/15 px-3 py-2.5 text-sm text-white/75 hover:bg-white/10 hover:text-white text-left">
           Log out
         </button>
       </aside>
-      <main className="relative flex-1 p-6 bg-neutral-100 overflow-hidden flex flex-col">
-        {logoAvailable && <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center"><img src="/images/logo.png" alt="" className="max-w-[42%] max-h-[42%] object-contain rounded-full opacity-75" onError={() => setLogoAvailable(false)} /></div>}
-        <div className="relative z-10 flex-1">{children}</div>
-        <footer className="relative z-10 text-center text-xs text-neutral-500 pt-6">DEVELOPED BY RIJAN ADHIKARI</footer>
+      <main className="relative min-w-0 flex-1 p-4 md:p-7 overflow-hidden flex flex-col">
+        {logoAvailable && <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center"><img src="/images/logo.png" alt="" className="max-w-[42%] max-h-[42%] object-contain rounded-full opacity-[0.035]" onError={() => setLogoAvailable(false)} /></div>}
+        <div className="relative z-10 flex-1 w-full">{children}</div>
+        <footer className="relative z-10 text-center text-[11px] tracking-[0.18em] text-neutral-400 pt-8">ROYAL SKYE · DEVELOPED BY RIJAN ADHIKARI</footer>
       </main>
     </div>
   );
