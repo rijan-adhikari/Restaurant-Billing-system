@@ -4,8 +4,6 @@ Run inside the backend container: `docker compose exec backend python seed.py`
 
 Creates DEMO credentials only - force password change before real use.
 """
-from decimal import Decimal
-
 from app.database import Base, engine, SessionLocal
 from app import models
 from app.security import hash_password
@@ -43,27 +41,10 @@ if not cabin_table:
         print("Created Cabin Room table for existing database")
 
 if db.query(models.Category).count() == 0:
-    categories = {
-        "Dinner": [("Chicken Sekuwa", 350), ("Chicken Chilli", 380), ("Chicken Tikka", 360),
-                   ("Mutton Sekuwa", 450), ("Mutton Curry", 420), ("Dal Bhat", 250)],
-        "Snacks": [("Chowmein", 200), ("Fried Rice", 220), ("Momo", 180), ("French Fries", 150),
-                   ("Chicken Wings", 300), ("Sausage", 220)],
-        "Drinks": [("Coke", 80), ("Sprite", 80), ("Fanta", 80), ("Mineral Water", 40), ("Fresh Juice", 150)],
-        "Coffee": [("Black Coffee", 120), ("Milk Coffee", 140), ("Cappuccino", 180),
-                   ("Latte", 180), ("Espresso", 150)],
-        "Cafe": [("Tea", 60), ("Masala Tea", 80), ("Hot Chocolate", 160), ("Cold Coffee", 170),
-                 ("Sandwich", 220)],
-    }
-    kitchen_categories = {"Dinner", "Snacks"}
-    for idx, (cat_name, items) in enumerate(categories.items()):
-        category = models.Category(name=cat_name, sort_order=idx)
-        db.add(category)
-        db.flush()
-        destination = models.RouteDestination.kitchen if cat_name in kitchen_categories else models.RouteDestination.bar
-        for i_idx, (item_name, price) in enumerate(items):
-            db.add(models.MenuItem(category_id=category.id, name=item_name, price=Decimal(price),
-                                    destination=destination, sort_order=i_idx))
-    print("Seeded demo categories and menu items")
+    category_names = ["Dinner", "Snacks", "Drinks", "Coffee", "Cafe"]
+    for idx, category_name in enumerate(category_names):
+        db.add(models.Category(name=category_name, sort_order=idx))
+    print("Seeded categories only; no demo dishes were added")
 
 if db.query(models.TaxSetting).count() == 0:
     db.add(models.TaxSetting(tax_enabled=True, tax_percent=Decimal("14.00"),
