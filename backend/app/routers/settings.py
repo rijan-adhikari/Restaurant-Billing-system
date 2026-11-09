@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -7,6 +8,19 @@ from app.deps import get_current_user, require_roles
 from app.security import hash_password
 
 router = APIRouter(prefix="/api", tags=["settings-users"])
+
+
+class RestaurantSettingsUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+    email: str = ""
+    phone: str = ""
+    address: str = ""
+    pan: str = ""
+    vat: str = ""
+    currency: str = "NPR"
+    logo_path: str = ""
+    qr_image_path: str = ""
+    receipt_footer: str = "Thank you for visiting!"
 
 
 @router.get("/settings/tax")
@@ -21,6 +35,10 @@ def get_tax_setting(db: Session = Depends(get_db), user=Depends(get_current_user
 def update_tax_setting(payload: schemas.TaxSettingUpdate, db: Session = Depends(get_db),
                         user=Depends(require_roles(models.RoleName.admin))):
     t = db.query(models.TaxSetting).first()
+    if (not payload.tax_percent.is_finite() or not payload.service_charge_percent.is_finite()
+            or not (0 <= payload.tax_percent <= 100)
+            or not (0 <= payload.service_charge_percent <= 100)):
+        raise HTTPException(status_code=422, detail="Tax and service charge percentages must be between 0 and 100")
     t.tax_enabled = payload.tax_enabled
     t.tax_percent = payload.tax_percent
     t.service_charge_enabled = payload.service_charge_enabled
@@ -37,6 +55,19 @@ def get_restaurant_setting(db: Session = Depends(get_db), user=Depends(get_curre
         "pan": r.pan, "vat": r.vat, "currency": r.currency,
         "logo_path": r.logo_path, "qr_image_path": r.qr_image_path, "receipt_footer": r.receipt_footer,
     }
+
+
+@router.put("/settings/restaurant")
+def update_restaurant_setting(payload: RestaurantSettingsUpdate, db: Session = Depends(get_db),
+                              user=Depends(require_roles(models.RoleName.admin))):
+    setting = db.query(models.RestaurantSetting).first()
+    if not setting:
+        setting = models.RestaurantSetting()
+        db.add(setting)
+    for key, value in payload.model_dump().items():
+        setattr(setting, key, value.strip() if isinstance(value, str) else value)
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/users", response_model=list[schemas.UserOut])
