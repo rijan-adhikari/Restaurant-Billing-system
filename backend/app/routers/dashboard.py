@@ -3,6 +3,7 @@ from datetime import date, datetime, time, timedelta
 from fastapi import APIRouter, Depends
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from app.database import get_db
 from app import models
@@ -29,9 +30,31 @@ def dashboard_summary(report_date: date | None = None, db: Session = Depends(get
     month_end = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
     year_start = daily_start.replace(month=1, day=1)
     year_end = year_start.replace(year=year_start.year + 1)
-    daily_sales = _sum_amount(db, models.Bill, models.Bill.grand_total, daily_start, daily_end)
-    monthly_sales = _sum_amount(db, models.Bill, models.Bill.grand_total, month_start, month_end)
-    yearly_sales = _sum_amount(db, models.Bill, models.Bill.grand_total, year_start, year_end)
+    # Net sales exclude VAT/tax and service-charge collections; discounts are already
+    # reflected in grand_total and must not be deducted a second time.
+    def net_sales(start: datetime, end: datetime):
+        return db.query(func.coalesce(func.sum(
+            models.Bill.grand_total - models.Bill.tax_amount - models.Bill.service_charge_amount
+        ), 0)).filter(models.Bill.created_at >= start, models.Bill.created_at < end).scalar()
+
+    def estimated_cogs(start: datetime, end: datetime):
+        value = db.execute(text("""SELECT COALESCE(SUM(ri.quantity * oi.quantity * i.average_cost /
+            NULLIF(r.yield_quantity,0)),0) FROM bills b
+            JOIN orders o ON o.id=b.order_id
+            JOIN order_items oi ON oi.order_id=o.id AND oi.is_cancelled=FALSE
+            JOIN recipes r ON r.menu_item_id=oi.menu_item_id
+            JOIN recipe_items ri ON ri.recipe_id=r.id
+            JOIN inventory_items i ON i.id=ri.item_id
+            WHERE b.created_at >= :start AND b.created_at < :end"""),
+            {"start": start, "end": end}).scalar_one()
+        return value or 0
+
+    daily_sales = net_sales(daily_start, daily_end)
+    monthly_sales = net_sales(month_start, month_end)
+    yearly_sales = net_sales(year_start, year_end)
+    daily_cogs = estimated_cogs(daily_start, daily_end)
+    monthly_cogs = estimated_cogs(month_start, month_end)
+    yearly_cogs = estimated_cogs(year_start, year_end)
     daily_expenses = _sum_amount(db, models.Expense, models.Expense.amount, daily_start, daily_end, models.Expense.expense_date)
     monthly_expenses = _sum_amount(db, models.Expense, models.Expense.amount, month_start, month_end, models.Expense.expense_date)
     yearly_expenses = _sum_amount(db, models.Expense, models.Expense.amount, year_start, year_end, models.Expense.expense_date)
@@ -48,8 +71,11 @@ def dashboard_summary(report_date: date | None = None, db: Session = Depends(get
         "report_date": target.isoformat(),
         "daily_sales": str(daily_sales), "monthly_sales": str(monthly_sales), "yearly_sales": str(yearly_sales),
         "daily_expenses": str(daily_expenses), "monthly_expenses": str(monthly_expenses), "yearly_expenses": str(yearly_expenses),
-        "daily_profit": str(daily_sales - daily_expenses), "monthly_profit": str(monthly_sales - monthly_expenses),
-        "yearly_profit": str(yearly_sales - yearly_expenses),
+        "daily_profit": str(daily_sales - daily_cogs - daily_expenses),
+        "monthly_profit": str(monthly_sales - monthly_cogs - monthly_expenses),
+        "yearly_profit": str(yearly_sales - yearly_cogs - yearly_expenses),
+        "daily_estimated_cogs": str(daily_cogs), "monthly_estimated_cogs": str(monthly_cogs),
+        "yearly_estimated_cogs": str(yearly_cogs),
         "outstanding": str(outstanding),
         "pending_kots": pending_kots,
         "occupied_tables": occupied_tables,
