@@ -28,6 +28,11 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
     order = db.query(models.Order).filter(models.Order.id == payload.order_id).with_for_update().first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    if order.status != models.OrderStatus.open:
+        raise HTTPException(status_code=409, detail="Only open orders can be billed")
+
+    if any(not p.amount.is_finite() or p.amount < 0 for p in payload.payments):
+        raise HTTPException(status_code=400, detail="Payment amounts must be non-negative finite values")
 
     if db.query(models.Bill).filter(models.Bill.order_id == order.id).first():
         raise HTTPException(status_code=409, detail="This order has already been billed")
@@ -159,8 +164,10 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
 def repay_balance(payload: schemas.RepaymentCreate, db: Session = Depends(get_db),
                    user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager,
                                                models.RoleName.cashier))):
+    if not payload.amount.is_finite() or payload.amount <= 0:
+        raise HTTPException(status_code=400, detail="Repayment amount must be a positive finite value")
     balance = db.query(models.CustomerBalance).filter(
-        models.CustomerBalance.id == payload.customer_balance_id).first()
+        models.CustomerBalance.id == payload.customer_balance_id).with_for_update().first()
     if not balance:
         raise HTTPException(status_code=404, detail="Outstanding balance not found")
     if payload.amount > balance.remaining_amount:
