@@ -63,6 +63,12 @@ def init_operations_schema() -> None:
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(), recipe_id UUID NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
             item_id UUID NOT NULL REFERENCES inventory_items(id), quantity NUMERIC(14,3) NOT NULL CHECK (quantity > 0),
             UNIQUE(recipe_id,item_id))""",
+        """CREATE TABLE IF NOT EXISTS bill_cost_snapshots (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(), bill_id UUID NOT NULL REFERENCES bills(id) ON DELETE CASCADE,
+            order_item_id UUID NOT NULL REFERENCES order_items(id), inventory_item_id UUID NOT NULL REFERENCES inventory_items(id),
+            quantity NUMERIC(14,3) NOT NULL, unit_cost NUMERIC(14,2) NOT NULL, total_cost NUMERIC(14,2) NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW())""",
+        "CREATE INDEX IF NOT EXISTS ix_bill_cost_snapshots_bill ON bill_cost_snapshots(bill_id)",
         """CREATE TABLE IF NOT EXISTS staff_attendance (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(), user_id UUID NOT NULL REFERENCES users(id),
             clock_in TIMESTAMP NOT NULL DEFAULT NOW(), clock_out TIMESTAMP, notes TEXT)""",
@@ -440,28 +446,30 @@ def profit_loss(start: date = Query(default_factory=lambda: date.today().replace
         FROM expenses WHERE expense_date::date BETWEEN :start AND :end"""), {"start": start, "end": end}).mappings().one()
     payroll = db.execute(text("""SELECT COALESCE(SUM(gross_pay),0) FROM payroll_entries
         WHERE period_end BETWEEN :start AND :end"""), {"start": start, "end": end}).scalar_one()
-    cogs = db.execute(text("""SELECT COALESCE(SUM(ri.quantity * oi.quantity * i.average_cost / r.yield_quantity),0) total
-        FROM bills b JOIN orders o ON o.id=b.order_id JOIN order_items oi ON oi.order_id=o.id AND oi.is_cancelled=FALSE
-        JOIN recipes r ON r.menu_item_id=oi.menu_item_id JOIN recipe_items ri ON ri.recipe_id=r.id
-        JOIN inventory_items i ON i.id=ri.item_id WHERE b.created_at::date BETWEEN :start AND :end"""),
+    cogs = db.execute(text("""SELECT COALESCE(SUM(s.total_cost),0) total
+        FROM bill_cost_snapshots s JOIN bills b ON b.id=s.bill_id
+        WHERE b.created_at::date BETWEEN :start AND :end"""),
+        {"start": start, "end": end}).scalar_one()
+    refunds = db.execute(text("""SELECT COALESCE(SUM(r.amount),0) FROM bill_refunds r
+        JOIN bills b ON b.id=r.bill_id WHERE b.created_at::date BETWEEN :start AND :end"""),
         {"start": start, "end": end}).scalar_one()
     # Bill grand_total already has discounts deducted and tax/service added.
     # Revenue excludes tax collected; do not subtract the discount a second time.
-    net_sales = Decimal(str(sales["gross_sales"])) - Decimal(str(sales["discounts"]))
+    net_sales = Decimal(str(sales["gross_sales"])) - Decimal(str(sales["discounts"])) - Decimal(str(refunds))
     gross_profit = net_sales - Decimal(str(cogs))
     payroll_expense = Decimal(str(payroll))
     total_operating_expenses = Decimal(str(expenses["total"])) + payroll_expense
     operating_profit = gross_profit - total_operating_expenses
     return {"period": {"start": start, "end": end}, "bill_count": sales["bill_count"],
         "gross_billed": str(sales["total"]), "gross_sales_before_discount": str(sales["gross_sales"]),
-        "discounts": str(sales["discounts"]), "tax_collected": str(sales["tax"]),
+        "discounts": str(sales["discounts"]), "refunds": str(refunds), "tax_collected": str(sales["tax"]),
         "service_charge": str(sales["service_charge"]), "net_sales": str(net_sales),
         "cost_of_goods_sold_estimate": str(cogs), "gross_profit_estimate": str(gross_profit),
         "operating_expenses": str(expenses["total"]), "payroll_expense": str(payroll_expense),
         "total_operating_expenses": str(total_operating_expenses),
         "operating_profit_estimate": str(operating_profit),
         "expense_breakdown": expenses["breakdown"],
-        "note": "COGS is estimated from current recipe quantities and current average costs; historical recipe/cost snapshots are required for audited historical profit."}
+        "note": "COGS is based on ingredient cost snapshots captured when each bill was finalized. This is an operational report, not an audited financial statement."}
 
 
 @router.get("/reports/stock")
