@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api/client";
 
-type Tab = "cash" | "refunds" | "suppliers" | "loyalty" | "audit" | "settings";
+type Tab = "cash" | "refunds" | "suppliers" | "loyalty" | "reports" | "audit" | "settings";
 const tabs: { id: Tab; label: string }[] = [
   { id: "cash", label: "Cash drawer" }, { id: "refunds", label: "Refunds" },
-  { id: "suppliers", label: "Supplier ledger" }, { id: "loyalty", label: "Loyalty" },
+  { id: "suppliers", label: "Supplier ledger" }, { id: "loyalty", label: "Loyalty" },\n  { id: "reports", label: "Reports & exports" },
   { id: "audit", label: "Audit trail" }, { id: "settings", label: "Business settings" },
 ];
 const field = "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm";
@@ -25,7 +25,7 @@ export default function AdminControl() {
   const [refund, setRefund] = useState({ bill_id: "", amount: "", reason: "", method: "cash" });
   const [supplierEntry, setSupplierEntry] = useState({ supplier_id: "", entry_type: "payment", amount: "", reference: "", notes: "" });
   const [supplierReturn, setSupplierReturn] = useState({ supplier_id: "", item_id: "", quantity: "", unit_cost: "", reference: "", notes: "" });
-  const [adjustment, setAdjustment] = useState({ customer_id: "", points: "", notes: "" });
+  const [adjustment, setAdjustment] = useState({ customer_id: "", points: "", notes: "" });\n  const [reportFrom, setReportFrom] = useState(new Date().toISOString().slice(0, 8) + "01");\n  const [reportTo, setReportTo] = useState(new Date().toISOString().slice(0, 10));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -92,6 +92,26 @@ export default function AdminControl() {
     run(() => api.post("/api/admin/loyalty/adjust", { ...adjustment, points: Number(adjustment.points) }), "Loyalty points adjusted.");
     setAdjustment({ customer_id: "", points: "", notes: "" });
   };
+  const downloadReport = async (format: "csv" | "xlsx" | "pdf") => {
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const response = await api.get(`/api/admin/reports/sales.${format}`, {
+        params: { start: reportFrom, end: reportTo }, responseType: "blob",
+      });
+      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+      const anchor = document.createElement("a");
+      anchor.href = blobUrl;
+      anchor.download = `royal-skye-sales-${reportFrom}-to-${reportTo}.${format}`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(blobUrl);
+      setMessage(`${format.toUpperCase()} sales report generated.`);
+    } catch (e: any) {
+      setError("Could not generate the report for the selected dates.");
+    } finally { setBusy(false); }
+  };
+
   const saveSettings = async () => {
     await run(async () => {
       await api.put("/api/settings/restaurant", restaurant);
@@ -167,6 +187,19 @@ export default function AdminControl() {
       </form></section>
       <section className={panel}><h2 className="font-semibold text-lg mb-3">Customer rewards balances</h2><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Customer</th><th>Phone</th><th>Available points</th><th>Lifetime points</th></tr></thead><tbody>{data.loyalty.map((a: any) => <tr key={a.id} className="border-b"><td className="py-2">{a.name}</td><td>{a.phone || "—"}</td><td className="font-semibold">{a.points_balance}</td><td>{a.lifetime_points}</td></tr>)}</tbody></table></div></section>
     </div>}
+
+    {tab === "reports" && <section className={panel}>
+      <h2 className="font-semibold text-lg">Management reports</h2>
+      <p className="mt-1 text-sm text-neutral-500">Export sales, discounts, refunds, taxes, payment methods, top-selling items and staff performance for a selected period.</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 items-end">
+        <label className="block text-xs">From date<input type="date" className={field + " mt-1"} value={reportFrom} onChange={e => setReportFrom(e.target.value)} /></label>
+        <label className="block text-xs">To date<input type="date" className={field + " mt-1"} value={reportTo} onChange={e => setReportTo(e.target.value)} /></label>
+        <button className={primary} disabled={busy || !reportFrom || !reportTo || reportTo < reportFrom} onClick={() => downloadReport("xlsx")}>Export Excel (.xlsx)</button>
+        <button className={primary} disabled={busy || !reportFrom || !reportTo || reportTo < reportFrom} onClick={() => downloadReport("pdf")}>Export PDF</button>
+        <button className="rounded-lg border border-brand px-4 py-2 text-sm font-semibold text-brand sm:col-span-2" disabled={busy || !reportFrom || !reportTo || reportTo < reportFrom} onClick={() => downloadReport("csv")}>Export CSV</button>
+      </div>
+      <div className="mt-4 rounded-xl bg-neutral-50 p-3 text-xs text-neutral-600">The exports include sales totals, discounts, refunds, VAT/service charge, payment-method breakdown, item quantities and waiter performance. Financial totals are operational reports and should be reconciled against bank and cash records.</div>
+    </section>}
 
     {tab === "audit" && <section className={panel}><h2 className="font-semibold text-lg mb-3">Recent administrative activity</h2><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Time</th><th>User</th><th>Action</th><th>Details</th></tr></thead><tbody>{data.audit.map((a: any) => <tr key={a.id} className="border-b"><td className="py-2 whitespace-nowrap">{new Date(a.created_at).toLocaleString()}</td><td>{a.full_name || a.username || "System"}</td><td>{a.action}</td><td>{a.details}</td></tr>)}</tbody></table></div></section>}
 
