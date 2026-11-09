@@ -267,7 +267,7 @@ export default function Admin() {
           <form onSubmit={addStaff} className="space-y-3">
             <input required placeholder="Username" className="w-full border rounded-lg px-3 py-2" value={staffForm.username} onChange={(e) => setStaffForm({ ...staffForm, username: e.target.value })} />
             <input required placeholder="Full name" className="w-full border rounded-lg px-3 py-2" value={staffForm.full_name} onChange={(e) => setStaffForm({ ...staffForm, full_name: e.target.value })} />
-            <input required minLength={6} type="password" placeholder="Temporary password" className="w-full border rounded-lg px-3 py-2" value={staffForm.password} onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })} />
+            <input required minLength={8} type="password" placeholder="Temporary password (8+ characters)" className="w-full border rounded-lg px-3 py-2" value={staffForm.password} onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })} />
             <select className="w-full border rounded-lg px-3 py-2" value={staffForm.role} onChange={(e) => setStaffForm({ ...staffForm, role: e.target.value })}>
               {staffRoles.map((role) => <option key={role} value={role}>{role[0].toUpperCase() + role.slice(1)}</option>)}
             </select>
