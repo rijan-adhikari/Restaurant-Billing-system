@@ -98,9 +98,14 @@ def dashboard_summary(report_date: date | None = None, db: Session = Depends(get
 
 @router.delete("/sales")
 def clear_sales(db: Session = Depends(get_db), user=Depends(require_roles(models.RoleName.admin))):
+    # Delete restrictive FK dependants before bills; otherwise PostgreSQL rejects
+    # the bulk bill deletion and the whole transaction rolls back.
     db.query(models.BalanceTransaction).delete(synchronize_session=False)
     db.query(models.CustomerBalance).delete(synchronize_session=False)
     db.query(models.Payment).delete(synchronize_session=False)
+    db.execute(text("DELETE FROM bill_refunds"))
+    db.execute(text("DELETE FROM loyalty_transactions"))
+    db.execute(text("UPDATE loyalty_accounts SET points_balance = 0, lifetime_points = 0, updated_at = NOW()"))
     deleted_bills = db.query(models.Bill).delete(synchronize_session=False)
     db.query(models.KOT).filter(models.KOT.status.notin_([models.KOTStatus.served, models.KOTStatus.cancelled])).update(
         {models.KOT.status: models.KOTStatus.cancelled}, synchronize_session=False
