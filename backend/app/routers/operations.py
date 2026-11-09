@@ -235,8 +235,8 @@ def stock_movement(item_id: str, payload: MovementCreate, db: Session = Depends(
     qty = decimal_value(payload.quantity, "quantity")
     if qty < 0 or (qty == 0 and payload.movement_type != "adjustment"):
         raise HTTPException(422, "Quantity must be positive (zero is allowed only for an adjustment)")
-    if payload.movement_type == "purchase" and payload.unit_cost < 0:
-        raise HTTPException(422, "Purchase unit cost cannot be negative")
+    if payload.unit_cost < 0:
+        raise HTTPException(422, "Unit cost cannot be negative")
     item = db.execute(text("SELECT * FROM inventory_items WHERE id=:id AND is_active=TRUE FOR UPDATE"), {"id": item_id}).mappings().first()
     if not item:
         raise HTTPException(404, "Inventory item not found")
