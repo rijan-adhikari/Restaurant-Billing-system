@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { api, wsBaseUrl } from "../api/client";
 
 interface KOTItemView { id: string; quantity: number; notes: string; menu_item_name: string; }
-interface KOTView { id: string; kot_number: string; status: string; order_number: string; table_name: string; items: KOTItemView[]; }
+interface KOTView { id: string; kot_number: string; status: string; order_number: string; table_name: string; customer_name?: string | null; phone?: string | null; delivery_address?: string | null; items: KOTItemView[]; }
 
 const STATION = "bar"; // Bar.tsx uses the same component pattern with "bar"
 
@@ -34,9 +34,10 @@ export default function Bar() {
         {kots.filter((k) => k.status !== "served" && k.status !== "cancelled").map((k) => (
           <div key={k.id} className="bg-white rounded-xl shadow p-4">
             <div className="flex justify-between text-sm text-neutral-500 mb-2">
-              <span>{k.kot_number} - Table {k.table_name}</span>
+              <span>{k.kot_number} - {k.table_name}</span>
               <span className="capitalize font-medium text-brand">{k.status}</span>
             </div>
+            {(k.customer_name || k.delivery_address) && <div className="mb-3 rounded-lg bg-amber-50 p-2 text-xs text-amber-900"><p className="font-semibold">{k.customer_name || "Service order"} {k.phone ? "· " + k.phone : ""}</p>{k.delivery_address && <p>{k.delivery_address}</p>}</div>}
             <ul className="text-sm mb-3 space-y-1">
               {k.items.map((i) => (
                 <li key={i.id}>
