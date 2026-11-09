@@ -45,7 +45,7 @@ async def create_order(payload: schemas.OrderCreate, db: Session = Depends(get_d
             floor = db.query(models.Floor).filter(models.Floor.is_active.is_(True)).order_by(models.Floor.sort_order).first()
             if not floor:
                 raise HTTPException(status_code=409, detail="Create an active floor before taking service orders")
-            table = models.DiningTable(floor_id=floor.id, name="Service Orders", capacity=0,
+            table = models.DiningTable(floor_id=floor.id, name="Service Orders", capacity=1,
                                        status=models.TableStatus.available, sort_order=9999)
             db.add(table)
             db.flush()
