@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { api } from "../api/client";
+import { api, apiErrorMessage } from "../api/client";
 
 type Tab = "inventory" | "suppliers" | "purchases" | "recipes" | "expenses" | "reports" | "staff" | "reservations";
 const tabs: Tab[] = ["inventory", "suppliers", "purchases", "recipes", "expenses", "reports", "staff", "reservations"];
@@ -41,7 +41,7 @@ export default function Operations() {
   const run = async (fn: () => Promise<any>, success: string) => {
     setBusy(true); setError(""); setMessage("");
     try { await fn(); setMessage(success); await load(); }
-    catch (e: any) { setError(e?.response?.data?.detail || "Request failed. Check the entered values."); }
+    catch (e: any) { setError(apiErrorMessage(e, "Restaurant operations request failed")); }
     finally { setBusy(false); }
   };
   const lowStock = data.inventory.filter((x: any) => x.low_stock);
