@@ -142,6 +142,10 @@ class SupplierEntry(BaseModel):
     notes: str | None = None
 
 
+class ServiceOrderStatusUpdate(BaseModel):
+    status: Literal["received", "preparing", "ready", "out_for_delivery", "completed", "cancelled"]
+
+
 class LoyaltySettings(BaseModel):
     enabled: bool = True
     spend_per_point: Decimal = Field(gt=0)
@@ -286,6 +290,44 @@ def export_sales_pdf(start: date, end: date, db: Session = Depends(get_db),
     output.seek(0)
     return StreamingResponse(output, media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=royal-skye-sales-{start}-{end}.pdf"})
+
+
+@router.get("/service-orders")
+def list_service_orders(status: str | None = None, db: Session = Depends(get_db),
+                        user=Depends(require_roles(*MANAGERS))):
+    rows = db.execute(text("""SELECT d.*,o.order_number,o.status order_status,
+        b.bill_number,b.grand_total,b.amount_paid
+        FROM order_service_details d JOIN orders o ON o.id=d.order_id
+        LEFT JOIN bills b ON b.order_id=o.id
+        WHERE (:status IS NULL OR d.status=:status)
+        ORDER BY d.created_at DESC LIMIT 500"""), {"status": status}).mappings().all()
+    return [dict(row) for row in rows]
+
+
+@router.patch("/service-orders/{order_id}/status")
+def update_service_order_status(order_id: str, payload: ServiceOrderStatusUpdate,
+                                db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    detail = db.execute(text("""SELECT d.*,o.status order_status FROM order_service_details d
+        JOIN orders o ON o.id=d.order_id WHERE d.order_id=:id FOR UPDATE OF d,o"""),
+        {"id": order_id}).mappings().first()
+    if not detail:
+        raise HTTPException(404, "Service order not found")
+    if payload.status == "out_for_delivery" and detail["service_type"] != "delivery":
+        raise HTTPException(422, "Only delivery orders can be dispatched")
+    if payload.status in ("out_for_delivery", "completed") and detail["order_status"] != "completed":
+        raise HTTPException(409, "Generate the bill before dispatching or completing this service order")
+    if payload.status == "cancelled":
+        if detail["order_status"] != "open":
+            raise HTTPException(409, "A billed order cannot be cancelled here; record a refund instead")
+        db.execute(text("UPDATE orders SET status='cancelled' WHERE id=:id"), {"id": order_id})
+        db.execute(text("UPDATE order_items SET is_cancelled=TRUE WHERE order_id=:id"), {"id": order_id})
+        db.execute(text("UPDATE kots SET status='cancelled' WHERE order_id=:id AND status NOT IN ('served','cancelled')"),
+                   {"id": order_id})
+    db.execute(text("UPDATE order_service_details SET status=:status,updated_at=NOW() WHERE order_id=:id"),
+               {"status": payload.status, "id": order_id})
+    audit(db, user.id, "service_order.status", f"Order {order_id} status changed to {payload.status}")
+    db.commit()
+    return {"ok": True, "order_id": order_id, "status": payload.status}
 
 
 @router.get("/audit")
