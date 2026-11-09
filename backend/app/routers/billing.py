@@ -85,6 +85,12 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
     for method, amount in payment_rows:
         if amount > 0:
             db.add(models.Payment(bill_id=bill.id, method=method, amount=amount, received_by=user.id))
+            if method == models.PaymentMethod.cash:
+                open_shift = db.execute(text("SELECT id FROM cash_drawer_shifts WHERE status='open' ORDER BY opened_at DESC LIMIT 1 FOR UPDATE")).first()
+                if open_shift:
+                    db.execute(text("""INSERT INTO cash_drawer_entries(shift_id,entry_type,amount,reference,notes,created_by)
+                        VALUES(:shift,'sale',:amount,:reference,'Cash received for POS bill',:user)"""),
+                        {"shift": open_shift.id, "amount": amount, "reference": bill.bill_number, "user": user.id})
 
     if grand_total - total_paid > 0:
         db.add(models.CustomerBalance(
