@@ -46,6 +46,11 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
         cabin_fee = Decimal("500.00")
         subtotal += cabin_fee
 
+    service_details = db.execute(text("SELECT * FROM order_service_details WHERE order_id=:id"),
+                                 {"id": order.id}).mappings().first()
+    delivery_fee = Decimal(str(service_details["delivery_fee"])) if service_details else Decimal("0.00")
+    subtotal += delivery_fee
+
     if (not payload.discount_percent.is_finite()
             or payload.discount_percent < 0 or payload.discount_percent > 100):
         raise HTTPException(status_code=422, detail="Discount percentage must be between 0 and 100")
@@ -200,6 +205,13 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
             "unit_price": "500.00",
             "total": "500.00",
         })
+    if delivery_fee > 0:
+        bill_items.append({
+            "name": "Delivery fee",
+            "quantity": 1,
+            "unit_price": str(delivery_fee),
+            "total": str(delivery_fee),
+        })
 
     return {
         "id": bill.id, "bill_number": bill.bill_number, "subtotal": str(subtotal),
@@ -219,7 +231,12 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
             "currency": restaurant.currency if restaurant else "NPR",
             "receipt_footer": restaurant.receipt_footer if restaurant else "Thankyou For Visiting Us.",
         },
-        "table_name": order.table.name if order.table else "",
+        "table_name": service_details["service_type"].title() if service_details else (order.table.name if order.table else ""),
+        "service_type": service_details["service_type"] if service_details else "dine_in",
+        "customer_name": service_details["customer_name"] if service_details else None,
+        "phone": service_details["phone"] if service_details else None,
+        "delivery_address": service_details["delivery_address"] if service_details else None,
+        "delivery_fee": str(delivery_fee),
         "order_number": order.order_number,
         "items": bill_items,
         "payments": [{"method": method.value, "amount": str(amount)} for method, amount in payment_rows if amount > 0],
