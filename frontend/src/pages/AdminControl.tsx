@@ -172,7 +172,7 @@ export default function AdminControl() {
 
     {tab === "settings" && <div className="grid gap-4 lg:grid-cols-2">
       <section className={panel}><h2 className="font-semibold text-lg mb-3">Restaurant identity & receipt</h2><div className="space-y-3">
-        {(["name","email","phone","address","pan","vat","currency","logo_path","qr_image_path","receipt_footer"] as const).map(k => <label key={k} className="block text-xs capitalize">{k.replaceAll("_"," ")}{k === "address" || k === "receipt_footer" ? <textarea rows={2} className={field + " mt-1"} value={restaurant[k] || ""} onChange={e => setRestaurant({ ...restaurant, [k]: e.target.value })} /> : <input className={field + " mt-1"} value={restaurant[k] || ""} onChange={e => setRestaurant({ ...restaurant, [k]: e.target.value })} />}</label>)}
+        {(["name","email","phone","address","pan","vat","currency","logo_path","qr_image_path","receipt_footer"] as const).map(k => <label key={k} className="block text-xs capitalize">{k.replace(/_/g," ")}{k === "address" || k === "receipt_footer" ? <textarea rows={2} className={field + " mt-1"} value={restaurant[k] || ""} onChange={e => setRestaurant({ ...restaurant, [k]: e.target.value })} /> : <input className={field + " mt-1"} value={restaurant[k] || ""} onChange={e => setRestaurant({ ...restaurant, [k]: e.target.value })} />}</label>)}
       </div></section>
       <section className={panel}><h2 className="font-semibold text-lg mb-3">Tax, service charge & loyalty rules</h2><div className="space-y-3">
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!tax.tax_enabled} onChange={e => setTax({ ...tax, tax_enabled: e.target.checked })} /> Enable VAT / tax</label>
