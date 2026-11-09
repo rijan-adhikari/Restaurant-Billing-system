@@ -181,10 +181,14 @@ def list_kots(station: models.RouteDestination, db: Session = Depends(get_db), u
     for kot in kots:
         order = kot.order
         table = order.table if hasattr(order, "table") else None
+        service_details = db.execute(text("SELECT * FROM order_service_details WHERE order_id=:id"), {"id": order.id}).mappings().first()
         result.append({
             "id": kot.id, "kot_number": kot.kot_number, "status": kot.status,
             "created_at": kot.created_at, "order_number": order.order_number,
-            "table_name": order.table.name if order.table else "",
+            "table_name": service_details["service_type"].title() if service_details else (order.table.name if order.table else ""),
+            "customer_name": service_details["customer_name"] if service_details else None,
+            "phone": service_details["phone"] if service_details else None,
+            "delivery_address": service_details["delivery_address"] if service_details else None,
             "items": [{"id": i.id, "quantity": i.quantity, "notes": i.notes,
                        "menu_item_name": i.order_item.menu_item.name} for i in kot.items],
         })
