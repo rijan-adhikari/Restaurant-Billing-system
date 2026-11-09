@@ -80,9 +80,9 @@ export default function Operations() {
         }), "Inventory item created.");
       }}>
         {input("Item name", stock.name, (v) => setStock({ ...stock, name: v }))}
-        <label className="block text-xs font-medium text-neutral-600">{t("Supplier name")}<select className={field + " mt-1"} value={stock.supplier_id} onChange={(e) => setStock({ ...stock, supplier_id: e.target.value })}><option value="">{t("Choose supplier")}</option>{data.suppliers.map((supplier: any) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label>
+        <label className="block text-xs font-medium text-neutral-600">{t("Supplier name")}<select className={field + " mt-1"} required value={stock.supplier_id} onChange={(e) => setStock({ ...stock, supplier_id: e.target.value })}><option value="">{t("Choose supplier")}</option>{data.suppliers.map((supplier: any) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label>
         {input("Expiry date", stock.expiry_date, (v) => setStock({ ...stock, expiry_date: v }), "date", false)}
-        {input("Total cost (NPR)", stock.total_cost, (v) => setStock({ ...stock, total_cost: v }), "number")}
+        <label className="block text-xs font-medium text-neutral-600">{t("Total cost (NPR)")}<input className={field + " mt-1"} type="number" min="0" step="0.01" required value={stock.total_cost} onChange={(e) => setStock({ ...stock, total_cost: e.target.value })} /></label>
         <label className="block text-xs font-medium text-neutral-600">{t("Quantity")}<input className={field + " mt-1"} type="number" min="0" step="any" required value={stock.quantity} onChange={(e) => setStock({ ...stock, quantity: e.target.value })} /></label>
         <label className="block text-xs font-medium text-neutral-600">{t("Reorder level")}<input className={field + " mt-1"} type="number" min="0" step="any" required value={stock.reorder_level} onChange={(e) => setStock({ ...stock, reorder_level: e.target.value })} /></label>
         <button className={button} disabled={busy}>{t("Add item")}</button>
