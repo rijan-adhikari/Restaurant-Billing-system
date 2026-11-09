@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api/client";
 
-type Tab = "cash" | "refunds" | "suppliers" | "loyalty" | "reports" | "audit" | "settings";
+type Tab = "cash" | "refunds" | "suppliers" | "loyalty" | "reports" | "backup" | "audit" | "settings";
 const tabs: { id: Tab; label: string }[] = [
   { id: "cash", label: "Cash drawer" }, { id: "refunds", label: "Refunds" },
   { id: "suppliers", label: "Supplier ledger" }, { id: "loyalty", label: "Loyalty" },
-  { id: "reports", label: "Reports & exports" },
+  { id: "reports", label: "Reports & exports" }, { id: "backup", label: "Backup & restore" },
   { id: "audit", label: "Audit trail" }, { id: "settings", label: "Business settings" },
 ];
 const field = "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm";
@@ -29,6 +29,8 @@ export default function AdminControl() {
   const [adjustment, setAdjustment] = useState({ customer_id: "", points: "", notes: "" });
   const [reportFrom, setReportFrom] = useState(new Date().toISOString().slice(0, 8) + "01");
   const [reportTo, setReportTo] = useState(new Date().toISOString().slice(0, 10));
+  const [backupFile, setBackupFile] = useState<File | null>(null);
+  const [restoreConfirmation, setRestoreConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -112,6 +114,41 @@ export default function AdminControl() {
       setMessage(`${format.toUpperCase()} sales report generated.`);
     } catch (e: any) {
       setError("Could not generate the report for the selected dates.");
+    } finally { setBusy(false); }
+  };
+
+  const downloadBackup = async () => {
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const response = await api.get("/api/admin/backup", { responseType: "blob" });
+      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+      const anchor = document.createElement("a");
+      anchor.href = blobUrl;
+      anchor.download = `royal-skye-backup-${new Date().toISOString().slice(0, 10)}.dump`;
+      document.body.appendChild(anchor); anchor.click(); anchor.remove();
+      window.URL.revokeObjectURL(blobUrl);
+      setMessage("Database backup downloaded. Keep it somewhere secure.");
+    } catch {
+      setError("Database backup failed. Check the backend logs and database connection.");
+    } finally { setBusy(false); }
+  };
+
+  const restoreBackup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!backupFile || restoreConfirmation !== "RESTORE ROYAL SKYE DATABASE") {
+      setError("Choose a .dump file and enter the exact confirmation phrase.");
+      return;
+    }
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const body = new FormData();
+      body.append("backup_file", backupFile);
+      body.append("confirmation", restoreConfirmation);
+      const response = await api.post("/api/admin/restore", body);
+      setMessage(`${response.data.message} Safety backup: ${response.data.safety_backup}`);
+      setBackupFile(null); setRestoreConfirmation("");
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || "Database restore failed. The pre-restore safety backup is retained.");
     } finally { setBusy(false); }
   };
 
@@ -203,6 +240,15 @@ export default function AdminControl() {
       </div>
       <div className="mt-4 rounded-xl bg-neutral-50 p-3 text-xs text-neutral-600">The exports include sales totals, discounts, refunds, VAT/service charge, payment-method breakdown, item quantities and waiter performance. Financial totals are operational reports and should be reconciled against bank and cash records.</div>
     </section>}
+
+    {tab === "backup" && <div className="grid gap-4 lg:grid-cols-2">
+      <section className={panel}><h2 className="font-semibold text-lg">Create database backup</h2><p className="mt-2 text-sm text-neutral-500">Download a PostgreSQL custom-format backup containing restaurant data and configuration. Backups are also stored on the server's persistent backup volume.</p><button className={primary + " mt-4"} disabled={busy} onClick={downloadBackup}>Create & download backup</button></section>
+      <section className={panel}><h2 className="font-semibold text-lg">Restore from backup</h2><p className="mt-2 text-sm text-red-700">Restore replaces the current database. The system first creates a safety backup and blocks restore while orders or cash drawer shifts are open.</p><form onSubmit={restoreBackup} className="mt-4 space-y-3">
+        <label className="block text-xs">PostgreSQL backup file (.dump)<input required type="file" accept=".dump,application/octet-stream" className={field + " mt-1"} onChange={e => setBackupFile(e.target.files?.[0] || null)} /></label>
+        <label className="block text-xs">Type RESTORE ROYAL SKYE DATABASE to confirm<input required className={field + " mt-1"} value={restoreConfirmation} onChange={e => setRestoreConfirmation(e.target.value)} /></label>
+        <button className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={busy || !backupFile || restoreConfirmation !== "RESTORE ROYAL SKYE DATABASE"}>Restore database</button>
+      </form></section>
+    </div>}
 
     {tab === "audit" && <section className={panel}><h2 className="font-semibold text-lg mb-3">Recent administrative activity</h2><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Time</th><th>User</th><th>Action</th><th>Details</th></tr></thead><tbody>{data.audit.map((a: any) => <tr key={a.id} className="border-b"><td className="py-2 whitespace-nowrap">{new Date(a.created_at).toLocaleString()}</td><td>{a.full_name || a.username || "System"}</td><td>{a.action}</td><td>{a.details}</td></tr>)}</tbody></table></div></section>}
 
