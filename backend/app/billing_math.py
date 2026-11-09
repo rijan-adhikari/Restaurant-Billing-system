@@ -9,6 +9,10 @@ def money(value: Decimal) -> Decimal:
 def calculate_bill(subtotal: Decimal, discount_percent: Decimal, tax_enabled: bool,
                    tax_percent: Decimal, service_enabled: bool,
                    service_percent: Decimal) -> dict[str, Decimal]:
+    if not discount_percent.is_finite() or not tax_percent.is_finite() or not service_percent.is_finite():
+        raise HTTPException(status_code=400, detail='Bill percentages must be finite numbers')
+    if not subtotal.is_finite() or subtotal < 0:
+        raise HTTPException(status_code=400, detail='Subtotal must be a non-negative finite amount')
     if discount_percent < 0 or discount_percent > 100:
         raise HTTPException(status_code=400, detail='Discount percentage must be between 0 and 100')
     if tax_percent < 0 or service_percent < 0:
