@@ -376,7 +376,7 @@ export default function Admin() {
       </section>
 
       <section className="bg-white rounded-xl shadow p-5">
-        <h2 className="font-semibold mb-3">{t("Customer")} records</h2>
+        <h2 className="font-semibold mb-3">{t("Customer records")}</h2>
         <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2">{t("Name")}</th><th>{t("Phone")}</th><th>{t("Actions")}</th></tr></thead><tbody>{customers.map((customer) => <tr key={customer.id} className="border-b last:border-0"><td className="py-2">{customer.name}</td><td>{customer.phone || "—"}</td><td><button type="button" onClick={() => deleteCustomer(customer)} className="text-red-700">{t("Delete")}</button></td></tr>)}</tbody></table>{customers.length === 0 && <p className="mt-3 text-sm text-neutral-500">{t("No customer records.")}</p>}</div>
       </section>
 
