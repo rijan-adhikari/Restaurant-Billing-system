@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api/client";
+import { useLanguage } from "../context/LanguageContext";
 
 interface Category { id: string; name: string; }
 interface Staff { id: string; username: string; full_name: string; role: string; is_active: boolean; }
@@ -46,6 +47,7 @@ const emptyForm: MenuForm = {
 const staffRoles = ["admin", "manager", "waiter", "cashier", "kitchen", "bar"] as const;
 
 export default function Admin() {
+  const { t } = useLanguage();
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<MenuItem[]>([]);
   const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
@@ -137,6 +139,40 @@ export default function Admin() {
     if (!window.confirm("Delete this expense?")) return;
     await api.delete(`/api/expenses/${id}`);
     await load();
+  };
+
+
+  const deleteMenuItem = async (item: MenuItem) => {
+    if (!window.confirm(`Remove "${item.name}" from the menu? If it has order history, it will be hidden rather than erased.`)) return;
+    try {
+      const response = await api.delete(`/api/menu-items/${item.id}`);
+      setMessage(response.data?.message || "Menu item removed.");
+      await load();
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || "Could not remove menu item.");
+    }
+  };
+
+  const deleteCategory = async (category: Category) => {
+    if (!window.confirm(`Delete category "${category.name}"? Categories containing food items cannot be deleted.`)) return;
+    try {
+      await api.delete(`/api/categories/${category.id}`);
+      setMessage("Category deleted.");
+      await load();
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || "Could not delete category.");
+    }
+  };
+
+  const deleteCustomer = async (customer: Customer) => {
+    if (!window.confirm(`Delete customer "${customer.name}"? Customers with bill or credit history are protected.`)) return;
+    try {
+      await api.delete(`/api/customers/${customer.id}`);
+      setMessage("Customer deleted.");
+      await load();
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || "Could not delete customer.");
+    }
   };
 
   const changePassword = async (userId: string) => {
@@ -255,14 +291,14 @@ export default function Admin() {
   return (
     <div className="max-w-6xl flex flex-col space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Master Panel</h1>
-        <p className="text-sm text-neutral-500 mt-1">Manage food, prices, routing, and availability.</p>
+        <h1 className="text-2xl font-semibold">{t("Master Panel")}</h1>
+        <p className="text-sm text-neutral-500 mt-1">{t("Manage food, prices, routing, and availability.")}</p>
       </div>
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
       </div>
 
       <section className="bg-white rounded-xl shadow p-5">
-        <h2 className="font-semibold mb-4">Staff accounts</h2>
+        <h2 className="font-semibold mb-4">{t("Staff accounts")}</h2>
         <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
           <form onSubmit={addStaff} className="space-y-3">
             <input required placeholder="Username" className="w-full border rounded-lg px-3 py-2" value={staffForm.username} onChange={(e) => setStaffForm({ ...staffForm, username: e.target.value })} />
@@ -285,7 +321,7 @@ export default function Admin() {
 
       <section className="bg-white rounded-xl shadow p-5">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold">Food menu</h2>
+          <h2 className="font-semibold">{t("Food menu")}</h2>
           <button type="button" onClick={() => setShowMenu((current) => !current)} className="border rounded-lg px-3 py-1.5 text-sm">
             {showMenu ? "Hide food menu" : "Show food menu"}
           </button>
@@ -300,7 +336,7 @@ export default function Admin() {
                   <td>{categories.find((category) => category.id === item.category_id)?.name || "-"}</td>
                   <td><div className="flex items-center gap-2"><input type="number" min="0" step="0.01" className="w-24 border rounded px-2 py-1" value={priceDrafts[item.id] ?? item.price} onChange={(e) => setPriceDrafts((current) => ({ ...current, [item.id]: e.target.value }))} /><button type="button" onClick={() => savePrice(item)} className="text-brand font-medium">Save</button></div></td>
                   <td><span className={item.is_available ? "text-green-700" : "text-neutral-400"}>{item.is_available ? "Available" : "Unavailable"}</span></td>
-                  <td className="text-right"><button onClick={() => edit(item)} className="text-brand font-medium">Edit</button></td>
+                  <td className="text-right"><div className="flex justify-end gap-3"><button onClick={() => edit(item)} className="text-brand font-medium">{t("Edit")}</button><button type="button" onClick={() => deleteMenuItem(item)} className="text-red-700 font-medium">{t("Delete")}</button></div></td>
                 </tr>
               ))}
             </tbody>
@@ -310,7 +346,7 @@ export default function Admin() {
       </section>
 
       <section className="bg-white rounded-xl shadow p-5">
-        <h2 className="font-semibold mb-4">Expenses</h2>
+        <h2 className="font-semibold mb-4">{t("Expenses")}</h2>
         <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
           <form onSubmit={addExpense} className="space-y-3">
             <input required placeholder="Category" className="w-full border rounded-lg px-3 py-2" value={expenseForm.category} onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })} />
@@ -319,15 +355,15 @@ export default function Admin() {
             <input required type="date" className="w-full border rounded-lg px-3 py-2" value={expenseForm.expense_date} onChange={(e) => setExpenseForm({ ...expenseForm, expense_date: e.target.value })} />
             <button type="submit" className="bg-brand text-white rounded-lg px-4 py-2 font-medium">Add expense</button>
           </form>
-          <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left border-b"><th className="py-2">Date</th><th>Category</th><th>Description</th><th>Amount</th><th /></tr></thead><tbody>{expenses.map((expense) => <tr key={expense.id} className="border-b last:border-0"><td className="py-2">{formatDateTime(expense.expense_date)}</td><td>{expense.category}</td><td>{expense.description}</td><td>Rs. {expense.amount}</td><td><button type="button" onClick={() => deleteExpense(expense.id)} className="text-red-700">Delete</button></td></tr>)}</tbody></table>{expenses.length === 0 && <p className="text-sm text-neutral-500 mt-3">No expenses recorded.</p>}</div>
+          <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left border-b"><th className="py-2">Date</th><th>Category</th><th>Description</th><th>Amount</th><th /></tr></thead><tbody>{expenses.map((expense) => <tr key={expense.id} className="border-b last:border-0"><td className="py-2">{formatDateTime(expense.expense_date)}</td><td>{expense.category}</td><td>{expense.description}</td><td>Rs. {expense.amount}</td><td><button type="button" onClick={() => deleteExpense(expense.id)} className="text-red-700">{t("Delete")}</button></td></tr>)}</tbody></table>{expenses.length === 0 && <p className="text-sm text-neutral-500 mt-3">No expenses recorded.</p>}</div>
         </div>
       </section>
 
       <section className="order-last bg-white rounded-xl shadow p-5">
-        <h2 className="font-semibold mb-4">{editingId ? "Edit food item" : "Add food item"}</h2>
+        <h2 className="font-semibold mb-4">{editingId ? t("Edit food item") : t("Add food item")}</h2>
         <form onSubmit={save} className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 items-end">
           <label className="block text-sm font-medium">Category<select required className="w-full border rounded-lg px-3 py-2 mt-1" value={form.category_id} onChange={(e) => updateForm("category_id", e.target.value)}><option value="">Select category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
-          <div className="flex gap-2"><input className="min-w-0 flex-1 border rounded-lg px-3 py-2" placeholder="New category name" value={categoryName} onChange={(e) => setCategoryName(e.target.value)} /><button type="button" onClick={addCategory} className="border border-brand text-brand rounded-lg px-3 py-2 text-sm">Add category</button></div>
+          <div className="flex gap-2"><input className="min-w-0 flex-1 border rounded-lg px-3 py-2" placeholder="New category name" value={categoryName} onChange={(e) => setCategoryName(e.target.value)} /><button type="button" onClick={addCategory} className="border border-brand text-brand rounded-lg px-3 py-2 text-sm">Add category</button></div><div className="md:col-span-2 flex flex-wrap gap-2">{categories.map((category) => <span key={category.id} className="inline-flex items-center gap-2 rounded-lg bg-neutral-100 px-3 py-1.5 text-xs">{category.name}<button type="button" aria-label={`Delete ${category.name}`} onClick={() => deleteCategory(category)} className="font-bold text-red-700">×</button></span>)}</div>
           <label className="block text-sm font-medium">Food name<input required className="w-full border rounded-lg px-3 py-2 mt-1" value={form.name} onChange={(e) => updateForm("name", e.target.value)} /></label>
           <label className="block text-sm font-medium">Description<textarea className="w-full border rounded-lg px-3 py-2 mt-1" value={form.description} onChange={(e) => updateForm("description", e.target.value)} /></label>
           <label className="block text-sm font-medium">Price (NPR)<input required min="0" step="0.01" type="number" className="w-full border rounded-lg px-3 py-2 mt-1" value={form.price} onChange={(e) => updateForm("price", e.target.value)} /></label>
@@ -340,7 +376,12 @@ export default function Admin() {
       </section>
 
       <section className="bg-white rounded-xl shadow p-5">
-        <h2 className="font-semibold mb-1">Customer history</h2>
+        <h2 className="font-semibold mb-3">{t("Customer")} records</h2>
+        <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2">{t("Name")}</th><th>{t("Phone")}</th><th>{t("Actions")}</th></tr></thead><tbody>{customers.map((customer) => <tr key={customer.id} className="border-b last:border-0"><td className="py-2">{customer.name}</td><td>{customer.phone || "—"}</td><td><button type="button" onClick={() => deleteCustomer(customer)} className="text-red-700">{t("Delete")}</button></td></tr>)}</tbody></table>{customers.length === 0 && <p className="mt-3 text-sm text-neutral-500">No customer records.</p>}</div>
+      </section>
+
+      <section className="bg-white rounded-xl shadow p-5">
+        <h2 className="font-semibold mb-1">{t("Customer history")}</h2>
         <p className="text-sm text-neutral-500 mb-4">See what each customer ordered and spent during a selected date range.</p>
         <div className="grid gap-3 md:grid-cols-4 items-end">
           <label className="text-sm">Customer
