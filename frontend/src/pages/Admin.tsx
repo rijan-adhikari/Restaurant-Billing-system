@@ -312,7 +312,7 @@ export default function Admin() {
           </form>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr className="text-left border-b"><th className="py-2">Name</th><th>Username</th><th>Role</th><th>{t("Status")}</th><th>Actions</th></tr></thead>
+              <thead><tr className="text-left border-b"><th className="py-2">{t("Name")}</th><th>{t("Username")}</th><th>{t("Role")}</th><th>{t("Status")}</th><th>{t("Actions")}</th></tr></thead>
               <tbody>{staff.map((member) => <tr key={member.id} className="border-b last:border-0"><td className="py-2">{member.full_name}</td><td>{member.username}</td><td><select className="border rounded px-2 py-1 capitalize" value={member.role} onChange={(e) => updateStaff(member.id, { role: e.target.value })}>{staffRoles.map((role) => <option key={role} value={role}>{role}</option>)}</select></td><td><button type="button" onClick={() => updateStaff(member.id, { is_active: !member.is_active })} className={member.is_active ? "text-emerald-700" : "text-red-700"}>{member.is_active ? "Active · disable" : "Inactive · enable"}</button></td><td><div className="flex gap-2"><button type="button" onClick={() => { setPasswordUserId(member.id); setNewPassword(""); }} className="text-brand">{t("Change password")}</button><button type="button" onClick={() => removeStaff(member.id)} className="text-red-700">{t("Disable")}</button></div>{passwordUserId === member.id && <div className="flex gap-2 mt-2"><input type="password" minLength={8} placeholder={t("New password")} className="border rounded px-2 py-1" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /><button type="button" onClick={() => changePassword(member.id)} className="bg-brand text-white rounded px-2 py-1">{t("Save")}</button></div>}</td></tr>)}</tbody>
             </table>
           </div>
@@ -328,7 +328,7 @@ export default function Admin() {
         </div>
         {showMenu && <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr className="text-left border-b"><th className="py-2">{t("Food")}</th><th>{t("Category")}</th><th>{t("Price (NPR)")}</th><th>Status</th><th /></tr></thead>
+            <thead><tr className="text-left border-b"><th className="py-2">{t("Food")}</th><th>{t("Category")}</th><th>{t("Price (NPR)")}</th><th>{t("Status")}</th><th /></tr></thead>
             <tbody>
               {items.map((item) => (
                 <tr key={item.id} className="border-b last:border-0">
@@ -349,13 +349,13 @@ export default function Admin() {
         <h2 className="font-semibold mb-4">{t("Expenses")}</h2>
         <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
           <form onSubmit={addExpense} className="space-y-3">
-            <input required placeholder="Category" className="w-full border rounded-lg px-3 py-2" value={expenseForm.category} onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })} />
-            <input required placeholder="Description" className="w-full border rounded-lg px-3 py-2" value={expenseForm.description} onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })} />
+            <input required placeholder={t("Category")} className="w-full border rounded-lg px-3 py-2" value={expenseForm.category} onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })} />
+            <input required placeholder={t("Description")} className="w-full border rounded-lg px-3 py-2" value={expenseForm.description} onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })} />
             <input required min="0" step="0.01" type="number" placeholder="Amount" className="w-full border rounded-lg px-3 py-2" value={expenseForm.amount} onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })} />
             <input required type="date" className="w-full border rounded-lg px-3 py-2" value={expenseForm.expense_date} onChange={(e) => setExpenseForm({ ...expenseForm, expense_date: e.target.value })} />
-            <button type="submit" className="bg-brand text-white rounded-lg px-4 py-2 font-medium">Add expense</button>
+            <button type="submit" className="bg-brand text-white rounded-lg px-4 py-2 font-medium">{t("Add expense")}</button>
           </form>
-          <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left border-b"><th className="py-2">Date</th><th>Category</th><th>Description</th><th>Amount</th><th /></tr></thead><tbody>{expenses.map((expense) => <tr key={expense.id} className="border-b last:border-0"><td className="py-2">{formatDateTime(expense.expense_date)}</td><td>{expense.category}</td><td>{expense.description}</td><td>Rs. {expense.amount}</td><td><button type="button" onClick={() => deleteExpense(expense.id)} className="text-red-700">{t("Delete")}</button></td></tr>)}</tbody></table>{expenses.length === 0 && <p className="text-sm text-neutral-500 mt-3">No expenses recorded.</p>}</div>
+          <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left border-b"><th className="py-2">{t("Date")}</th><th>Category</th><th>{t("Description")}</th><th>{t("Amount")}</th><th /></tr></thead><tbody>{expenses.map((expense) => <tr key={expense.id} className="border-b last:border-0"><td className="py-2">{formatDateTime(expense.expense_date)}</td><td>{expense.category}</td><td>{expense.description}</td><td>Rs. {expense.amount}</td><td><button type="button" onClick={() => deleteExpense(expense.id)} className="text-red-700">{t("Delete")}</button></td></tr>)}</tbody></table>{expenses.length === 0 && <p className="text-sm text-neutral-500 mt-3">{t("No expenses recorded.")}</p>}</div>
         </div>
       </section>
 
@@ -377,14 +377,14 @@ export default function Admin() {
 
       <section className="bg-white rounded-xl shadow p-5">
         <h2 className="font-semibold mb-3">{t("Customer")} records</h2>
-        <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2">{t("Name")}</th><th>{t("Phone")}</th><th>{t("Actions")}</th></tr></thead><tbody>{customers.map((customer) => <tr key={customer.id} className="border-b last:border-0"><td className="py-2">{customer.name}</td><td>{customer.phone || "—"}</td><td><button type="button" onClick={() => deleteCustomer(customer)} className="text-red-700">{t("Delete")}</button></td></tr>)}</tbody></table>{customers.length === 0 && <p className="mt-3 text-sm text-neutral-500">No customer records.</p>}</div>
+        <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2">{t("Name")}</th><th>{t("Phone")}</th><th>{t("Actions")}</th></tr></thead><tbody>{customers.map((customer) => <tr key={customer.id} className="border-b last:border-0"><td className="py-2">{customer.name}</td><td>{customer.phone || "—"}</td><td><button type="button" onClick={() => deleteCustomer(customer)} className="text-red-700">{t("Delete")}</button></td></tr>)}</tbody></table>{customers.length === 0 && <p className="mt-3 text-sm text-neutral-500">{t("No customer records.")}</p>}</div>
       </section>
 
       <section className="bg-white rounded-xl shadow p-5">
         <h2 className="font-semibold mb-1">{t("Customer history")}</h2>
         <p className="text-sm text-neutral-500 mb-4">{t("See what each customer ordered and spent during a selected date range.")}</p>
         <div className="grid gap-3 md:grid-cols-4 items-end">
-          <label className="text-sm">Customer
+          <label className="text-sm">{t("Customer")}
             <select className="w-full border rounded-lg px-3 py-2 mt-1" value={historyCustomerId} onChange={(e) => setHistoryCustomerId(e.target.value)}>
               <option value="">{t("All customers")}</option>
               {customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}{customer.phone ? ` - ${customer.phone}` : ""}</option>)}
