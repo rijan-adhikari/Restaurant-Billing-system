@@ -117,7 +117,7 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
         ))
 
     db.add(models.AuditLog(user_id=user.id, action="bill.create", details=f"Generated bill {bill.bill_number} for NPR {grand_total}"))
-        order.status = models.OrderStatus.completed
+    order.status = models.OrderStatus.completed
     if order.table:
         order.table.status = models.TableStatus.available
 
