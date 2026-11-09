@@ -73,6 +73,8 @@ def restore_database_backup(backup_file: UploadFile = File(...),
     open_shifts = db.execute(text("SELECT COUNT(*) FROM cash_drawer_shifts WHERE status='open'")).scalar_one()
     if open_orders or open_shifts:
         raise HTTPException(409, "Close all open orders and cash drawer shifts before restoring a database")
+    db.commit()
+    db.close()
     backup_dir = Path(__file__).resolve().parents[2] / "backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
     upload_path = backup_dir / ("restore-upload-" + uuid.uuid4().hex + ".dump")
