@@ -15,7 +15,7 @@ const money = (v: any) => "Rs. " + Number(v || 0).toLocaleString("en-IN", { mini
 
 export default function AdminControl() {
   const [tab, setTab] = useState<Tab>("cash");
-  const [data, setData] = useState<any>({ shifts: [], refunds: [], bills: [], suppliers: [], inventory: [], ledger: [], loyalty: [], audit: [] });
+  const [data, setData] = useState<any>({ shifts: [], refunds: [], bills: [], suppliers: [], inventory: [], ledger: [], supplierBalances: [], loyalty: [], audit: [] });
   const [shift, setShift] = useState<any>(null);
   const [tax, setTax] = useState<any>({ tax_enabled: true, tax_percent: "14", service_charge_enabled: false, service_charge_percent: "0" });
   const [restaurant, setRestaurant] = useState<any>({ name: "", email: "", phone: "", address: "", pan: "", vat: "", currency: "NPR", logo_path: "", qr_image_path: "", receipt_footer: "" });
@@ -37,7 +37,7 @@ export default function AdminControl() {
     const requests = [
       ["current", "/api/admin/cash-shifts/current"], ["shifts", "/api/admin/cash-shifts"],
       ["refunds", "/api/admin/refunds"], ["bills", "/api/admin/refundable-bills"],
-      ["suppliers", "/api/operations/suppliers"], ["inventory", "/api/operations/inventory"], ["ledger", "/api/admin/suppliers/ledger"],
+      ["suppliers", "/api/operations/suppliers"], ["inventory", "/api/operations/inventory"], ["ledger", "/api/admin/suppliers/ledger"], ["supplierBalances", "/api/admin/suppliers/balances"],
       ["loyalty", "/api/admin/loyalty/accounts"], ["loyaltySettings", "/api/admin/loyalty/settings"],
       ["audit", "/api/admin/audit"], ["customers", "/api/customers"], ["tax", "/api/settings/tax"], ["restaurant", "/api/settings/restaurant"],
     ] as const;
@@ -178,7 +178,7 @@ export default function AdminControl() {
         <textarea className={field} rows={2} placeholder="Reason / notes" value={supplierReturn.notes} onChange={e => setSupplierReturn({ ...supplierReturn, notes: e.target.value })} />
         <button className={primary} disabled={busy}>Return stock & update ledger</button>
       </form><p className="mt-3 text-xs text-amber-700">The system checks on-hand quantity, deducts returned stock and records the supplier credit in one transaction.</p></section>
-      <section className={panel}><h2 className="font-semibold text-lg mb-3">Supplier ledger</h2><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Date</th><th>Supplier</th><th>Type</th><th>Reference</th><th>Amount</th></tr></thead><tbody>{data.ledger.map((l: any) => <tr key={l.id} className="border-b"><td className="py-2">{new Date(l.created_at).toLocaleString()}</td><td>{l.supplier_name}</td><td className="capitalize">{l.entry_type}</td><td>{l.reference || "—"}</td><td>{money(l.amount)}</td></tr>)}</tbody></table></div></section>
+      <section className={panel}><h2 className="font-semibold text-lg mb-3">Supplier balances</h2><div className="mb-4 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Supplier</th><th>Phone</th><th>Outstanding payable</th></tr></thead><tbody>{data.supplierBalances.map((b: any) => <tr key={b.id} className="border-b"><td className="py-2">{b.name}</td><td>{b.phone || "—"}</td><td className={Number(b.balance) > 0 ? "font-semibold text-amber-700" : "text-emerald-700"}>{money(b.balance)}</td></tr>)}</tbody></table></div><h3 className="font-semibold mb-3">Ledger history</h3><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Date</th><th>Supplier</th><th>Type</th><th>Reference</th><th>Amount</th></tr></thead><tbody>{data.ledger.map((l: any) => <tr key={l.id} className="border-b"><td className="py-2">{new Date(l.created_at).toLocaleString()}</td><td>{l.supplier_name}</td><td className="capitalize">{l.entry_type}</td><td>{l.reference || "—"}</td><td>{money(l.amount)}</td></tr>)}</tbody></table></div></section>
     </div>}
 
     {tab === "loyalty" && <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
