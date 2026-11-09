@@ -459,7 +459,7 @@ def add_supplier_ledger_entry(payload: SupplierEntry, db: Session = Depends(get_
 
 
 @router.get("/loyalty/settings")
-def get_loyalty_settings(db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+def get_loyalty_settings(db: Session = Depends(get_db), user=Depends(require_roles(*CASHIERS))):
     row = db.execute(text("SELECT * FROM loyalty_settings WHERE id=1")).mappings().one()
     return dict(row)
 
@@ -505,7 +505,7 @@ def adjust_loyalty(payload: LoyaltyAdjustment, db: Session = Depends(get_db),
 
 @router.get("/loyalty/customers/{customer_id}")
 def customer_loyalty(customer_id: str, db: Session = Depends(get_db),
-                      user=Depends(require_roles(*MANAGERS))):
+                      user=Depends(require_roles(*CASHIERS))):
     account = db.execute(text("""SELECT a.*,c.name,c.phone FROM loyalty_accounts a
         JOIN customers c ON c.id=a.customer_id WHERE a.customer_id=:id"""), {"id": customer_id}).mappings().first()
     if not account:
