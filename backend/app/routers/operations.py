@@ -233,8 +233,10 @@ def stock_movement(item_id: str, payload: MovementCreate, db: Session = Depends(
     if payload.movement_type not in {"purchase", "consumption", "waste", "adjustment", "return"}:
         raise HTTPException(422, "Invalid stock movement type")
     qty = decimal_value(payload.quantity, "quantity")
-    if qty <= 0:
-        raise HTTPException(422, "Quantity must be positive")
+    if qty < 0 or (qty == 0 and payload.movement_type != "adjustment"):
+        raise HTTPException(422, "Quantity must be positive (zero is allowed only for an adjustment)")
+    if payload.movement_type == "purchase" and payload.unit_cost < 0:
+        raise HTTPException(422, "Purchase unit cost cannot be negative")
     item = db.execute(text("SELECT * FROM inventory_items WHERE id=:id AND is_active=TRUE FOR UPDATE"), {"id": item_id}).mappings().first()
     if not item:
         raise HTTPException(404, "Inventory item not found")
@@ -244,7 +246,14 @@ def stock_movement(item_id: str, payload: MovementCreate, db: Session = Depends(
     new_qty = Decimal(str(item["quantity"])) + delta
     if new_qty < 0:
         raise HTTPException(409, "Insufficient stock")
-    db.execute(text("UPDATE inventory_items SET quantity=:qty,updated_at=NOW() WHERE id=:id"), {"qty": new_qty, "id": item_id})
+    if payload.movement_type == "purchase":
+        old_qty = Decimal(str(item["quantity"]))
+        old_value = old_qty * Decimal(str(item["average_cost"]))
+        new_average = (old_value + qty * payload.unit_cost) / new_qty if new_qty else payload.unit_cost
+        db.execute(text("UPDATE inventory_items SET quantity=:qty,average_cost=:cost,updated_at=NOW() WHERE id=:id"),
+                   {"qty": new_qty, "cost": new_average, "id": item_id})
+    else:
+        db.execute(text("UPDATE inventory_items SET quantity=:qty,updated_at=NOW() WHERE id=:id"), {"qty": new_qty, "id": item_id})
     db.execute(text("""INSERT INTO stock_movements(item_id,movement_type,quantity,unit_cost,reference,notes,created_by)
         VALUES(:id,:type,:qty,:cost,:reference,:notes,:user)"""),
         {"id": item_id, "type": payload.movement_type, "qty": abs(delta), "cost": payload.unit_cost,
@@ -488,12 +497,18 @@ def mark_payroll_paid(payroll_id: str, db: Session = Depends(get_db), user=Depen
 
 @router.post("/reservations")
 def create_reservation(payload: ReservationCreate, db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
-    if payload.reserved_for < datetime.utcnow():
+    reserved_for = payload.reserved_for
+    if reserved_for.tzinfo is not None:
+        from datetime import timezone
+        reserved_for = reserved_for.astimezone(timezone.utc).replace(tzinfo=None)
+    if reserved_for < datetime.utcnow():
         raise HTTPException(422, "Reservation must be in the future")
+    if payload.table_id and not db.execute(text("SELECT id FROM tables WHERE id=:id AND is_active=TRUE"), {"id": payload.table_id}).first():
+        raise HTTPException(404, "Selected table not found")
     row = db.execute(text("""INSERT INTO reservations(customer_name,phone,party_size,reserved_for,table_id,notes)
         VALUES(:name,:phone,:size,:date,:table,:notes) RETURNING *"""),
         {"name": payload.customer_name, "phone": payload.phone, "size": payload.party_size,
-         "date": payload.reserved_for, "table": payload.table_id, "notes": payload.notes}).mappings().first()
+         "date": reserved_for, "table": payload.table_id, "notes": payload.notes}).mappings().first()
     db.commit()
     return dict(row)
 
