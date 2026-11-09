@@ -256,6 +256,13 @@ def create_refund(payload: RefundCreate, db: Session = Depends(get_db),
         VALUES(:bill,:amount,:reason,:method,:user) RETURNING *"""),
         {"bill": payload.bill_id, "amount": payload.amount, "reason": payload.reason,
          "method": payload.method, "user": user.id}).mappings().first()
+    if payload.method == "cash":
+        open_shift = db.execute(text("SELECT id FROM cash_drawer_shifts WHERE status='open' ORDER BY opened_at DESC LIMIT 1 FOR UPDATE")).first()
+        if open_shift:
+            db.execute(text("""INSERT INTO cash_drawer_entries(shift_id,entry_type,amount,reference,notes,created_by)
+                VALUES(:shift,'refund',:amount,:reference,:notes,:user)"""),
+                {"shift": open_shift.id, "amount": payload.amount, "reference": bill["bill_number"],
+                 "notes": payload.reason, "user": user.id})
     audit(db, user.id, "bill.refund", f"Bill {bill['bill_number']}: NPR {payload.amount}; {payload.reason}")
     db.commit()
     return dict(row)
