@@ -1,12 +1,26 @@
-
 # Environment secrets
 .env
 .env.*
 !.env.example
 
-# Python cache
+# Node / frontend build output
+node_modules/
+frontend/node_modules/
+frontend/dist/
+dist/
+npm-debug.log*
+
+# Python caches and virtual environments
 __pycache__/
 *.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
 
 # Local PostgreSQL backups (may contain customer and business data)
 backend/backups/
+
+# Local editor / OS files
+.DS_Store
+.vscode/
+.idea/
