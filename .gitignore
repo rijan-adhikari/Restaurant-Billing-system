@@ -7,3 +7,6 @@
 # Python cache
 __pycache__/
 *.py[cod]
+
+# Local PostgreSQL backups (may contain customer and business data)
+backend/backups/
