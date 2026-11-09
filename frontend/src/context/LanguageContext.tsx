@@ -26,7 +26,19 @@ const translations: Record<string, string> = {
   "Send order to": "अर्डर पठाउने ठाउँ", "Available for POS orders": "POS मा उपलब्ध",
   "Date": "मिति", "Amount": "रकम", "Phone": "फोन नम्बर", "Customer": "ग्राहक",
   "From date": "सुरु मिति", "To date": "अन्तिम मिति", "All customers": "सबै ग्राहक",
-  "English": "अंग्रेजी", "Nepali": "नेपाली", "Language": "भाषा"
+  "English": "अंग्रेजी", "Nepali": "नेपाली", "Language": "भाषा",
+  "Temporary password (8+ characters)": "अस्थायी पासवर्ड (कम्तीमा ८ अक्षर)",
+  "Temporary login": "अस्थायी लगइन", "Change password": "पासवर्ड परिवर्तन", "New password": "नयाँ पासवर्ड",
+  "Disable": "बन्द गर्नुहोस्", "Active · disable": "सक्रिय · बन्द गर्नुहोस्", "Inactive · enable": "निष्क्रिय · खोल्नुहोस्",
+  "Hide food menu": "मेनु लुकाउनुहोस्", "Show food menu": "मेनु देखाउनुहोस्",
+  "Food menu is hidden. Click “Show food menu” to view and edit items.": "मेनु लुकाइएको छ। खाना हेर्न र सम्पादन गर्न “मेनु देखाउनुहोस्” थिच्नुहोस्।",
+  "Food": "खाना", "Available": "उपलब्ध", "Unavailable": "अनुपलब्ध",
+  "New category name": "नयाँ वर्गको नाम", "Add category": "वर्ग थप्नुहोस्", "Select category": "वर्ग छान्नुहोस्",
+  "Save changes": "परिवर्तन सेभ गर्नुहोस्", "Add food": "खाना थप्नुहोस्", "Cancel": "रद्द गर्नुहोस्",
+  "Customer records": "ग्राहक विवरण", "See what each customer ordered and spent during a selected date range.": "छानिएको मितिमा ग्राहकले के अर्डर गरे र कति खर्च गरे हेर्नुहोस्।",
+  "Loading...": "लोड हुँदैछ...", "No customer records.": "ग्राहक विवरण छैन।", "No expenses recorded.": "खर्च विवरण छैन।",
+  "No phone": "फोन छैन", "Total spent:": "जम्मा खर्च:", "Paid:": "तिरेको:", "Outstanding:": "बाँकी:",
+  "Choose filters and click Search history to view customer visits.": "ग्राहकको भ्रमण हेर्न मिति छानेर खोज्नुहोस्।"
 };
 
 interface LanguageContextValue {
