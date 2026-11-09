@@ -25,3 +25,16 @@ api.interceptors.response.use(
 
 const socketProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
 export const wsBaseUrl = import.meta.env.VITE_WS_BASE_URL || `${socketProtocol}//${window.location.host}`;
+
+
+export function apiErrorMessage(error: any, fallback = "The request failed.") {
+  const response = error?.response;
+  const detail = response?.data?.detail ?? response?.data?.message;
+  const detailText = Array.isArray(detail)
+    ? detail.map((item: any) => item?.msg || JSON.stringify(item)).join("; ")
+    : typeof detail === "string" ? detail : detail ? JSON.stringify(detail) : "";
+  if (detailText) return detailText;
+  if (response) return `${fallback} (HTTP ${response.status}${response.statusText ? `: ${response.statusText}` : ""}).`;
+  if (error?.request) return `${fallback} No response from the server; check that the backend and API proxy are running.`;
+  return error?.message || fallback;
+}
