@@ -30,16 +30,22 @@ services:
       ACCESS_TOKEN_EXPIRE_MINUTES: 480
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://192.168.1.100:5173}
     volumes:
-      - ./backend:/app
       - ./backend/backups:/app/backups
     ports:
       - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
   frontend:
     build: ./frontend
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "5173:5173"
 
