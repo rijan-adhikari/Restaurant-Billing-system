@@ -10,6 +10,7 @@ from sqlalchemy import text
 from app.database import get_db
 from app import models, schemas
 from app.deps import get_current_user, require_roles
+from app.billing_math import calculate_bill
 
 router = APIRouter(prefix="/api", tags=["billing"])
 
@@ -41,22 +42,29 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
         subtotal += cabin_fee
 
     tax_setting = db.query(models.TaxSetting).first()
-    tax_amount = Decimal("0")
-    service_amount = Decimal("0")
-    if tax_setting:
-        if tax_setting.tax_enabled:
-            tax_amount = (subtotal * Decimal(tax_setting.tax_percent) / Decimal("100")).quantize(Decimal("0.01"))
-        if tax_setting.service_charge_enabled:
-            service_amount = (subtotal * Decimal(tax_setting.service_charge_percent) / Decimal("100")).quantize(Decimal("0.01"))
+    tax_enabled = bool(tax_setting and tax_setting.tax_enabled)
+    tax_percent = Decimal(tax_setting.tax_percent) if tax_setting else Decimal("0")
+    service_enabled = bool(tax_setting and tax_setting.service_charge_enabled)
+    service_percent = Decimal(tax_setting.service_charge_percent) if tax_setting else Decimal("0")
+    totals = calculate_bill(subtotal, payload.discount_percent, tax_enabled, tax_percent,
+                            service_enabled, service_percent)
+    subtotal = totals["subtotal"]
+    tax_amount = totals["tax_amount"]
+    service_amount = totals["service_charge_amount"]
+    discount_amount = totals["discount_amount"]
+    grand_total = totals["grand_total"]
 
-    if payload.discount_percent < 0 or payload.discount_percent > 100:
-        raise HTTPException(status_code=400, detail="Discount percentage must be between 0 and 100")
-    discount_amount = (subtotal * payload.discount_percent / Decimal("100")).quantize(Decimal("0.01"))
-    grand_total = subtotal + tax_amount + service_amount - discount_amount
-
-    total_paid = sum((p.amount for p in payload.payments), Decimal("0"))
-    if total_paid > grand_total:
-        raise HTTPException(status_code=400, detail="Paid amount cannot exceed grand total")
+    tendered_total = sum((p.amount for p in payload.payments), Decimal("0"))
+    change_due = Decimal("0.00")
+    if tendered_total > grand_total:
+        if len(payload.payments) != 1 or payload.payments[0].method != models.PaymentMethod.cash:
+            raise HTTPException(status_code=400, detail="Overpayment is allowed only for a single cash payment")
+        change_due = tendered_total - grand_total
+        total_paid = grand_total
+        payment_rows = [(payload.payments[0].method, grand_total)]
+    else:
+        total_paid = tendered_total
+        payment_rows = [(p.method, p.amount) for p in payload.payments]
     if total_paid < grand_total and not payload.customer_id:
         raise HTTPException(status_code=400, detail="Customer required to record an outstanding balance")
 
@@ -69,8 +77,9 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
     db.add(bill)
     db.flush()
 
-    for p in payload.payments:
-        db.add(models.Payment(bill_id=bill.id, method=p.method, amount=p.amount, received_by=user.id))
+    for method, amount in payment_rows:
+        if amount > 0:
+            db.add(models.Payment(bill_id=bill.id, method=method, amount=amount, received_by=user.id))
 
     if grand_total - total_paid > 0:
         db.add(models.CustomerBalance(
@@ -127,6 +136,8 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
         "tax_amount": str(tax_amount), "service_charge_amount": str(service_amount),
         "discount_percent": str(payload.discount_percent), "discount_amount": str(discount_amount),
         "grand_total": str(grand_total), "amount_paid": str(total_paid),
+        "tendered_amount": str(tendered_total), "change_due": str(change_due),
+        "tax_percent": str(tax_percent), "service_charge_percent": str(service_percent),
         "outstanding_amount": str(grand_total - total_paid),
         "cabin_fee": str(cabin_fee),
         "created_at": bill.created_at,
@@ -140,7 +151,7 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
         "table_name": order.table.name if order.table else "",
         "order_number": order.order_number,
         "items": bill_items,
-        "payments": [{"method": p.method.value, "amount": str(p.amount)} for p in payload.payments],
+        "payments": [{"method": method.value, "amount": str(amount)} for method, amount in payment_rows if amount > 0],
     }
 
 
