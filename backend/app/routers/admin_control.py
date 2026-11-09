@@ -2,23 +2,105 @@ from __future__ import annotations
 
 from datetime import datetime, date
 from io import BytesIO
+from pathlib import Path
+import subprocess
+import uuid
 from decimal import Decimal
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app import models
-from app.database import get_db
+from app.database import get_db, engine
+from app.config import settings
+from sqlalchemy.engine import make_url
 from app.deps import require_roles
 
 router = APIRouter(prefix="/api/admin", tags=["administration"])
 ADMIN = (models.RoleName.admin,)
 MANAGERS = (models.RoleName.admin, models.RoleName.manager)
 CASHIERS = (models.RoleName.admin, models.RoleName.manager, models.RoleName.cashier)
+
+
+def _pg_args() -> tuple[list[str], dict[str, str]]:
+    url = make_url(settings.DATABASE_URL)
+    if not url.host or not url.database or not url.username:
+        raise HTTPException(500, "Database connection settings are incomplete")
+    args = ["--host", url.host, "--port", str(url.port or 5432),
+            "--username", url.username, "--dbname", url.database]
+    env = {}
+    if url.password:
+        env["PGPASSWORD"] = url.password
+    return args, env
+
+
+def _create_database_backup(destination: Path) -> None:
+    args, env = _pg_args()
+    try:
+        with destination.open("wb") as output:
+            subprocess.run(["pg_dump", *args, "--format=custom", "--no-owner", "--no-acl"],
+                           stdout=output, stderr=subprocess.PIPE, env={**__import__("os").environ, **env},
+                           check=True, timeout=900)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        destination.unlink(missing_ok=True)
+        raise HTTPException(500, "Database backup failed. Check database connectivity and server logs.")
+
+
+@router.get("/backup")
+def download_database_backup(user=Depends(require_roles(*ADMIN))):
+    backup_dir = Path(__file__).resolve().parents[2] / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    filename = "royal-skye-" + datetime.utcnow().strftime("%Y%m%d-%H%M%S") + ".dump"
+    destination = backup_dir / filename
+    _create_database_backup(destination)
+    return FileResponse(destination, filename=filename, media_type="application/octet-stream")
+
+
+@router.post("/restore")
+def restore_database_backup(backup_file: UploadFile = File(...),
+                            confirmation: str = Form(...),
+                            db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
+    if confirmation != "RESTORE ROYAL SKYE DATABASE":
+        raise HTTPException(400, "Type the exact restore confirmation phrase")
+    if not backup_file.filename or not backup_file.filename.lower().endswith(".dump"):
+        raise HTTPException(415, "Upload a PostgreSQL custom-format .dump backup")
+    open_orders = db.execute(text("SELECT COUNT(*) FROM orders WHERE status='open'")).scalar_one()
+    open_shifts = db.execute(text("SELECT COUNT(*) FROM cash_drawer_shifts WHERE status='open'")).scalar_one()
+    if open_orders or open_shifts:
+        raise HTTPException(409, "Close all open orders and cash drawer shifts before restoring a database")
+    backup_dir = Path(__file__).resolve().parents[2] / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    upload_path = backup_dir / ("restore-upload-" + uuid.uuid4().hex + ".dump")
+    with upload_path.open("wb") as output:
+        total = 0
+        while chunk := backup_file.file.read(1024 * 1024):
+            total += len(chunk)
+            if total > 500 * 1024 * 1024:
+                upload_path.unlink(missing_ok=True)
+                raise HTTPException(413, "Backup file exceeds the 500 MB upload limit")
+            output.write(chunk)
+    args, env = _pg_args()
+    process_env = {**__import__("os").environ, **env}
+    safety_backup = backup_dir / ("pre-restore-" + datetime.utcnow().strftime("%Y%m%d-%H%M%S") + ".dump")
+    _create_database_backup(safety_backup)
+    try:
+        subprocess.run(["pg_restore", "--list", str(upload_path)], capture_output=True,
+                       env=process_env, check=True, timeout=120)
+        subprocess.run(["pg_restore", *args, "--clean", "--if-exists", "--no-owner",
+                        "--no-acl", "--single-transaction", "--exit-on-error", str(upload_path)],
+                       capture_output=True, env=process_env, check=True, timeout=1800)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        raise HTTPException(500, f"Restore failed. A safety backup was retained as {safety_backup.name}.")
+    finally:
+        upload_path.unlink(missing_ok=True)
+    engine.dispose()
+    return {"ok": True, "message": "Database restored. Sign in again using an account from the restored backup.",
+            "safety_backup": safety_backup.name}
 
 
 def audit(db: Session, user_id: str, action: str, details: str = "") -> None:
