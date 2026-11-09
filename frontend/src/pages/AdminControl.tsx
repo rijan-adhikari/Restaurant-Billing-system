@@ -26,7 +26,9 @@ export default function AdminControl() {
   const [refund, setRefund] = useState({ bill_id: "", amount: "", reason: "", method: "cash" });
   const [supplierEntry, setSupplierEntry] = useState({ supplier_id: "", entry_type: "payment", amount: "", reference: "", notes: "" });
   const [supplierReturn, setSupplierReturn] = useState({ supplier_id: "", item_id: "", quantity: "", unit_cost: "", reference: "", notes: "" });
-  const [adjustment, setAdjustment] = useState({ customer_id: "", points: "", notes: "" });\n  const [reportFrom, setReportFrom] = useState(new Date().toISOString().slice(0, 8) + "01");\n  const [reportTo, setReportTo] = useState(new Date().toISOString().slice(0, 10));
+  const [adjustment, setAdjustment] = useState({ customer_id: "", points: "", notes: "" });
+  const [reportFrom, setReportFrom] = useState(new Date().toISOString().slice(0, 8) + "01");
+  const [reportTo, setReportTo] = useState(new Date().toISOString().slice(0, 10));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
