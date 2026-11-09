@@ -379,6 +379,8 @@ def profit_loss(start: date = Query(default_factory=lambda: date.today().replace
     expenses = db.execute(text("""SELECT COALESCE(SUM(amount),0) total,
         COALESCE(json_agg(json_build_object('category',category,'amount',amount,'department',department)),'[]'::json) breakdown
         FROM expenses WHERE expense_date::date BETWEEN :start AND :end"""), {"start": start, "end": end}).mappings().one()
+    payroll = db.execute(text("""SELECT COALESCE(SUM(gross_pay),0) FROM payroll_entries
+        WHERE period_end BETWEEN :start AND :end"""), {"start": start, "end": end}).scalar_one()
     cogs = db.execute(text("""SELECT COALESCE(SUM(ri.quantity * oi.quantity * i.average_cost / r.yield_quantity),0) total
         FROM bills b JOIN orders o ON o.id=b.order_id JOIN order_items oi ON oi.order_id=o.id AND oi.is_cancelled=FALSE
         JOIN recipes r ON r.menu_item_id=oi.menu_item_id JOIN recipe_items ri ON ri.recipe_id=r.id
@@ -388,13 +390,17 @@ def profit_loss(start: date = Query(default_factory=lambda: date.today().replace
     # Revenue excludes tax collected; do not subtract the discount a second time.
     net_sales = Decimal(str(sales["gross_sales"])) - Decimal(str(sales["discounts"]))
     gross_profit = net_sales - Decimal(str(cogs))
-    operating_profit = gross_profit - Decimal(str(expenses["total"]))
+    payroll_expense = Decimal(str(payroll))
+    total_operating_expenses = Decimal(str(expenses["total"])) + payroll_expense
+    operating_profit = gross_profit - total_operating_expenses
     return {"period": {"start": start, "end": end}, "bill_count": sales["bill_count"],
         "gross_billed": str(sales["total"]), "gross_sales_before_discount": str(sales["gross_sales"]),
         "discounts": str(sales["discounts"]), "tax_collected": str(sales["tax"]),
         "service_charge": str(sales["service_charge"]), "net_sales": str(net_sales),
         "cost_of_goods_sold_estimate": str(cogs), "gross_profit_estimate": str(gross_profit),
-        "operating_expenses": str(expenses["total"]), "operating_profit_estimate": str(operating_profit),
+        "operating_expenses": str(expenses["total"]), "payroll_expense": str(payroll_expense),
+        "total_operating_expenses": str(total_operating_expenses),
+        "operating_profit_estimate": str(operating_profit),
         "expense_breakdown": expenses["breakdown"],
         "note": "COGS is estimated from current recipe quantities and current average costs; historical recipe/cost snapshots are required for audited historical profit."}
 
