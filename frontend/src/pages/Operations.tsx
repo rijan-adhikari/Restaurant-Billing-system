@@ -20,7 +20,7 @@ export default function Operations() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [stock, setStock] = useState({ name: "", quantity: "0", reorder_level: "0", total_cost: "0", supplier_id: "", expiry_date: "" });
+  const [stock, setStock] = useState({ name: "", quantity: "0", reorder_level: "0", total_cost: "0", supplier_name: "", expiry_date: "" });
   const [supplier, setSupplier] = useState({ name: "", phone: "", email: "", address: "", tax_number: "" });
   const [purchase, setPurchase] = useState({ supplier_id: "", items: [{ item_id: "", quantity: "", unit_cost: "" }], notes: "" });
   const [recipe, setRecipe] = useState({ menu_item_id: "", items: [{ item_id: "", quantity: "1" }], yield_quantity: "1", instructions: "" });
@@ -67,20 +67,30 @@ export default function Operations() {
           setError(t("Enter a quantity greater than zero when total cost is provided."));
           return;
         }
-        run(() => api.post("/api/operations/inventory", {
-          name: stock.name,
-          sku: null,
-          category: "General",
-          unit: "pcs",
-          quantity,
-          reorder_level: Number(stock.reorder_level),
-          average_cost: quantity > 0 ? totalCost / quantity : 0,
-          supplier_id: stock.supplier_id || null,
-          expiry_date: stock.expiry_date || null,
-        }), "Inventory item created.");
+        run(async () => {
+          const supplierName = stock.supplier_name.trim();
+          const existingSupplier = data.suppliers.find((item: any) => item.name.trim().toLowerCase() === supplierName.toLowerCase());
+          let supplierId = existingSupplier?.id;
+          if (!supplierId) {
+            const created = await api.post("/api/operations/suppliers", { name: supplierName });
+            supplierId = created.data.id;
+            setData((old: any) => ({ ...old, suppliers: [...old.suppliers, created.data] }));
+          }
+          await api.post("/api/operations/inventory", {
+            name: stock.name,
+            sku: null,
+            category: "General",
+            unit: "pcs",
+            quantity,
+            reorder_level: Number(stock.reorder_level),
+            average_cost: quantity > 0 ? totalCost / quantity : 0,
+            supplier_id: supplierId,
+            expiry_date: stock.expiry_date || null,
+          });
+        }, "Inventory item created.");
       }}>
         {input("Item name", stock.name, (v) => setStock({ ...stock, name: v }))}
-        <label className="block text-xs font-medium text-neutral-600">{t("Supplier name")}<select className={field + " mt-1"} required value={stock.supplier_id} onChange={(e) => setStock({ ...stock, supplier_id: e.target.value })}><option value="">{t("Choose supplier")}</option>{data.suppliers.map((supplier: any) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}</select></label>
+        {input("Supplier name", stock.supplier_name, (v) => setStock({ ...stock, supplier_name: v }))}
         {input("Expiry date", stock.expiry_date, (v) => setStock({ ...stock, expiry_date: v }), "date", false)}
         <label className="block text-xs font-medium text-neutral-600">{t("Total cost (NPR)")}<input className={field + " mt-1"} type="number" min="0" step="0.01" required value={stock.total_cost} onChange={(e) => setStock({ ...stock, total_cost: e.target.value })} /></label>
         <label className="block text-xs font-medium text-neutral-600">{t("Quantity")}<input className={field + " mt-1"} type="number" min="0" step="any" required value={stock.quantity} onChange={(e) => setStock({ ...stock, quantity: e.target.value })} /></label>
