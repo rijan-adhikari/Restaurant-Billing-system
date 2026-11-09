@@ -53,7 +53,7 @@ const translations: Record<string, string> = {
   "admin": "प्रशासक", "manager": "व्यवस्थापक", "cashier": "क्यासियर", "waiter": "वेटर",
   "kitchen": "भान्सा", "bar": "बार", "Username:": "प्रयोगकर्ता नाम:", "Password:": "पासवर्ड:",
   "Could not load customer history.": "ग्राहक विवरण लोड गर्न सकिएन।",
-  "This removes bills, payments, credit balances, and completed/open order state. Menu, customers, staff, and expenses are preserved.": "यसले बिल, भुक्तानी, उधारो र अर्डर विवरण हटाउँछ। मेनु, ग्राहक, कर्मचारी र खर्च सुरक्षित रहन्छन्।"
+  "This removes bills, payments, credit balances, and completed/open order state. Menu, customers, staff, and expenses are preserved.": "यसले बिल, भुक्तानी, उधारो र अर्डर विवरण हटाउँछ। मेनु, ग्राहक, कर्मचारी र खर्च सुरक्षित रहन्छन्।",
 };
 
 interface LanguageContextValue {
