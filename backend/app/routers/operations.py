@@ -217,7 +217,7 @@ def create_inventory(payload: InventoryCreate, db: Session = Depends(get_db), us
         raise HTTPException(422, "Stock, reorder level and cost cannot be negative")
     row = db.execute(text("""INSERT INTO inventory_items(name,sku,category,unit,quantity,reorder_level,average_cost,supplier_id,expiry_date)
         VALUES(:name,:sku,:category,:unit,:quantity,:reorder,:cost,:supplier,:expiry) RETURNING *"""),
-        {"name": payload.name.strip(), "sku": payload.sku, "category": payload.category,
+        {"name": payload.name.strip(), "sku": payload.sku.strip() or None if payload.sku else None, "category": payload.category,
          "unit": payload.unit, "quantity": payload.quantity, "reorder": payload.reorder_level,
          "cost": payload.average_cost, "supplier": payload.supplier_id, "expiry": payload.expiry_date}).mappings().first()
     if payload.quantity:
