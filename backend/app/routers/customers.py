@@ -1,6 +1,6 @@
 from datetime import date, datetime, time, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -70,3 +70,19 @@ def customer_history(customer_id: str | None = None, date_from: date | None = No
     for record in grouped.values():
         record["total_spent"] = str(record["total_spent"])
     return list(grouped.values())
+
+
+@router.delete("/{customer_id}")
+def delete_customer(customer_id: str, db: Session = Depends(get_db),
+                    user=Depends(require_roles(models.RoleName.admin))):
+    customer = db.query(models.Customer).filter(models.Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(404, "Customer not found")
+    if db.query(models.Bill).filter(models.Bill.customer_id == customer_id).first():
+        raise HTTPException(409, "This customer has bill history. The record is protected to preserve financial history.")
+    if db.query(models.CustomerBalance).filter(models.CustomerBalance.customer_id == customer_id).first():
+        raise HTTPException(409, "This customer has a credit balance history and cannot be deleted.")
+    db.add(models.AuditLog(user_id=user.id, action="customer.deleted", details=f"Deleted customer {customer.name}"))
+    db.delete(customer)
+    db.commit()
+    return {"ok": True}
