@@ -42,7 +42,7 @@ export default function Billing() {
   }, []);
 
   useEffect(() => {
-    if (!customerId) { setLoyaltyBalance(0); return; }
+    if (!customerId) { setLoyaltyBalance(0); setLoyaltyPoints("0"); setPreview(null); return; }
     api.get(`/api/admin/loyalty/customers/${customerId}`)
       .then((response) => setLoyaltyBalance(Number(response.data.points_balance || 0)))
       .catch(() => setLoyaltyBalance(0));
@@ -198,7 +198,7 @@ export default function Billing() {
         <label className="block text-sm font-medium">Customer for outstanding balance</label>
         <input className="w-full border rounded-lg px-3 py-2" placeholder="Search customer by name or phone" value={customerSearch} onChange={(e) => updateCustomerSearch(e.target.value)} />
         {customerSearch && <div className="border rounded-lg divide-y max-h-40 overflow-y-auto">
-          {matchingCustomers.map((customer) => <button type="button" key={customer.id} onClick={() => { setCustomerId(customer.id); setCustomerSearch(customer.name); }} className={`block w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 ${customer.id === customerId ? "bg-green-50" : ""}`}><span className="font-medium">{customer.name}</span>{customer.phone && <span className="text-neutral-500"> - {customer.phone}</span>}</button>)}
+          {matchingCustomers.map((customer) => <button type="button" key={customer.id} onClick={() => { setCustomerId(customer.id); setCustomerSearch(customer.name); setPreview(null); }} className={`block w-full text-left px-3 py-2 text-sm hover:bg-neutral-50 ${customer.id === customerId ? "bg-green-50" : ""}`}><span className="font-medium">{customer.name}</span>{customer.phone && <span className="text-neutral-500"> - {customer.phone}</span>}</button>)}
           {matchingCustomers.length === 0 && <p className="px-3 py-2 text-sm text-neutral-500">No customer found.</p>}
         </div>}
         {selectedCustomer && <p className="text-xs text-neutral-500">Customer ID: {selectedCustomer.id}</p>}
