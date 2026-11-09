@@ -34,7 +34,12 @@ export default function Tables() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold mb-4">Select a Table</h1>
+      <h1 className="text-2xl font-semibold mb-4">Select service type</h1>
+      <div className="mb-6 grid gap-3 sm:grid-cols-2">
+        <button onClick={() => navigate("/pos?service=takeaway")} className="rounded-xl border border-neutral-200 bg-white p-5 text-left shadow-sm transition hover:border-brand/40 hover:shadow-md"><p className="text-lg font-semibold">Takeaway</p><p className="mt-1 text-sm text-neutral-500">Create a pickup order without assigning a dining table.</p></button>
+        <button onClick={() => navigate("/pos?service=delivery")} className="rounded-xl border border-neutral-200 bg-white p-5 text-left shadow-sm transition hover:border-brand/40 hover:shadow-md"><p className="text-lg font-semibold">Delivery</p><p className="mt-1 text-sm text-neutral-500">Capture customer contact, delivery address and delivery fee.</p></button>
+      </div>
+      <h2 className="text-lg font-semibold mb-3">Dine-in tables</h2>
       <div className="flex gap-2 mb-6 flex-wrap">
         {floors.map((f) => (
           <button
@@ -51,7 +56,7 @@ export default function Tables() {
 
       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-4">
         {tables
-          .filter((t) => t.floor_id === activeFloor && !/cabin/i.test(t.name))
+          .filter((t) => t.floor_id === activeFloor && !/cabin|service orders/i.test(t.name))
           .map((t) => (
             <button
               key={t.id}
