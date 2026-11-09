@@ -203,6 +203,18 @@ async def update_kot_status(kot_id: str, payload: schemas.KOTStatusUpdate, db: S
     if not kot:
         raise HTTPException(status_code=404, detail="KOT not found")
     kot.status = payload.status
+    service = db.execute(text("SELECT service_type FROM order_service_details WHERE order_id=:id"),
+                          {"id": kot.order_id}).first()
+    if service:
+        statuses = [entry.status.value for entry in db.query(models.KOT).filter(models.KOT.order_id == kot.order_id).all()]
+        if statuses and all(status in ("ready", "served") for status in statuses):
+            service_status = "ready"
+        elif any(status in ("accepted", "preparing") for status in statuses):
+            service_status = "preparing"
+        else:
+            service_status = "received"
+        db.execute(text("UPDATE order_service_details SET status=:status,updated_at=NOW() WHERE order_id=:id"),
+                   {"status": service_status, "id": kot.order_id})
     db.commit()
     await manager.broadcast({"type": "kot_status", "kot_id": kot.id, "status": payload.status.value})
     return {"ok": True}
