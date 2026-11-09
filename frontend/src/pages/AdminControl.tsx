@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api/client";
 
-type Tab = "cash" | "refunds" | "suppliers" | "loyalty" | "reports" | "backup" | "audit" | "settings";
+type Tab = "cash" | "refunds" | "suppliers" | "loyalty" | "reports" | "service" | "backup" | "audit" | "settings";
 const tabs: { id: Tab; label: string }[] = [
   { id: "cash", label: "Cash drawer" }, { id: "refunds", label: "Refunds" },
   { id: "suppliers", label: "Supplier ledger" }, { id: "loyalty", label: "Loyalty" },
-  { id: "reports", label: "Reports & exports" }, { id: "backup", label: "Backup & restore" },
+  { id: "reports", label: "Reports & exports" }, { id: "service", label: "Service orders" }, { id: "backup", label: "Backup & restore" },
   { id: "audit", label: "Audit trail" }, { id: "settings", label: "Business settings" },
 ];
 const field = "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm";
@@ -15,7 +15,7 @@ const money = (v: any) => "Rs. " + Number(v || 0).toLocaleString("en-IN", { mini
 
 export default function AdminControl() {
   const [tab, setTab] = useState<Tab>("cash");
-  const [data, setData] = useState<any>({ shifts: [], refunds: [], bills: [], suppliers: [], inventory: [], ledger: [], supplierBalances: [], loyalty: [], audit: [] });
+  const [data, setData] = useState<any>({ shifts: [], refunds: [], bills: [], suppliers: [], inventory: [], ledger: [], supplierBalances: [], loyalty: [], serviceOrders: [], audit: [] });
   const [shift, setShift] = useState<any>(null);
   const [tax, setTax] = useState<any>({ tax_enabled: true, tax_percent: "14", service_charge_enabled: false, service_charge_percent: "0" });
   const [restaurant, setRestaurant] = useState<any>({ name: "", email: "", phone: "", address: "", pan: "", vat: "", currency: "NPR", logo_path: "", qr_image_path: "", receipt_footer: "" });
@@ -41,7 +41,7 @@ export default function AdminControl() {
       ["refunds", "/api/admin/refunds"], ["bills", "/api/admin/refundable-bills"],
       ["suppliers", "/api/operations/suppliers"], ["inventory", "/api/operations/inventory"], ["ledger", "/api/admin/suppliers/ledger"], ["supplierBalances", "/api/admin/suppliers/balances"],
       ["loyalty", "/api/admin/loyalty/accounts"], ["loyaltySettings", "/api/admin/loyalty/settings"],
-      ["audit", "/api/admin/audit"], ["customers", "/api/customers"], ["tax", "/api/settings/tax"], ["restaurant", "/api/settings/restaurant"],
+      ["audit", "/api/admin/audit"], ["serviceOrders", "/api/admin/service-orders"], ["customers", "/api/customers"], ["tax", "/api/settings/tax"], ["restaurant", "/api/settings/restaurant"],
     ] as const;
     const results = await Promise.allSettled(requests.map(([, url]) => api.get(url)));
     const next: any = {};
@@ -97,6 +97,10 @@ export default function AdminControl() {
     run(() => api.post("/api/admin/loyalty/adjust", { ...adjustment, points: Number(adjustment.points) }), "Loyalty points adjusted.");
     setAdjustment({ customer_id: "", points: "", notes: "" });
   };
+  const updateServiceOrder = async (orderId: string, status: string) => {
+    await run(() => api.patch(`/api/admin/service-orders/${orderId}/status`, { status }), "Service order status updated.");
+  };
+
   const downloadReport = async (format: "csv" | "xlsx" | "pdf") => {
     setBusy(true); setError(""); setMessage("");
     try {
@@ -239,6 +243,15 @@ export default function AdminControl() {
         <button className="rounded-lg border border-brand px-4 py-2 text-sm font-semibold text-brand sm:col-span-2" disabled={busy || !reportFrom || !reportTo || reportTo < reportFrom} onClick={() => downloadReport("csv")}>Export CSV</button>
       </div>
       <div className="mt-4 rounded-xl bg-neutral-50 p-3 text-xs text-neutral-600">The exports include sales totals, discounts, refunds, VAT/service charge, payment-method breakdown, item quantities and waiter performance. Financial totals are operational reports and should be reconciled against bank and cash records.</div>
+    </section>}
+
+    {tab === "service" && <section className={panel}>
+      <h2 className="font-semibold text-lg mb-1">Takeaway & delivery fulfilment</h2>
+      <p className="mb-3 text-sm text-neutral-500">Kitchen KOT progress updates these statuses automatically. Managers can dispatch delivery orders and close completed pickups.</p>
+      <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Order</th><th>Type / Customer</th><th>Contact / Address</th><th>Bill</th><th>Status</th></tr></thead><tbody>
+        {data.serviceOrders.map((o: any) => <tr key={o.order_id} className="border-b align-top"><td className="py-2 font-semibold">{o.order_number}<p className="text-xs font-normal text-neutral-500">{new Date(o.created_at).toLocaleString()}</p></td><td className="capitalize">{o.service_type}<p className="text-xs text-neutral-500">{o.customer_name || "Walk-in"}</p></td><td>{o.phone || "—"}<p className="max-w-xs text-xs text-neutral-500">{o.delivery_address || "—"}</p></td><td>{o.bill_number ? money(o.grand_total) : "Not billed"}</td><td><select className={field + " min-w-40"} value={o.status} onChange={e => updateServiceOrder(o.order_id, e.target.value)} disabled={busy}><option value="received">Received</option><option value="preparing">Preparing</option><option value="ready">Ready</option>{o.service_type === "delivery" && <option value="out_for_delivery">Out for delivery</option>}<option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></td></tr>)}
+        {data.serviceOrders.length === 0 && <tr><td colSpan={5} className="py-6 text-center text-neutral-400">No takeaway or delivery orders yet.</td></tr>}
+      </tbody></table></div>
     </section>}
 
     {tab === "backup" && <div className="grid gap-4 lg:grid-cols-2">
