@@ -46,7 +46,7 @@ export default function Admin() {
   const [error, setError] = useState("");
 
   const load = async () => {
-    const [categoryResponse, itemResponse, staffResponse, customerResponse, expenseResponse] = await Promise.all([
+    const [categoryResponse, staffResponse, customerResponse, expenseResponse] = await Promise.all([
       api.get("/api/categories"),
       api.get("/api/users"),
       api.get("/api/customers"),
