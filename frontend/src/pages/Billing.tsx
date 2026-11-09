@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api/client";
 
-interface OpenOrder { id: string; order_number: string; table_name: string; subtotal: string; grand_total: string; cabin_fee?: string; items: Array<{ name: string; quantity: number; unit_price: string; total: string }>; }
+interface OpenOrder { id: string; order_number: string; table_name: string; subtotal: string; grand_total: string; tax_amount: string; tax_percent: string; service_charge_amount: string; service_charge_percent: string; cabin_fee?: string; items: Array<{ name: string; quantity: number; unit_price: string; total: string }>; }
 interface Customer { id: string; name: string; phone?: string | null; }
 
 export default function Billing() {
@@ -16,7 +16,7 @@ export default function Billing() {
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
   const [result, setResult] = useState<any>(null);
-  const [preview, setPreview] = useState<{ order: OpenOrder; discountAmount: string; grandTotal: string; amountReceived: string; remainingCredit: string } | null>(null);
+  const [preview, setPreview] = useState<{ order: OpenOrder; discountAmount: string; taxAmount: string; serviceAmount: string; grandTotal: string; amountReceived: string; remainingCredit: string; changeDue: string } | null>(null);
   const [error, setError] = useState("");
 
   const loadData = async () => {
@@ -35,7 +35,7 @@ export default function Billing() {
   const selectOrder = (id: string) => {
     setOrderId(id);
     const order = orders.find((candidate) => candidate.id === id);
-    setAmount(order?.grand_total || "");
+    setAmount(method === "credit" ? "0" : (order?.grand_total || ""));
     setResult(null);
     setPreview(null);
   };
@@ -48,19 +48,31 @@ export default function Billing() {
       setError("Select an open order and enter a discount between 0% and 100%.");
       return;
     }
-    const discountAmount = (Number(selectedOrder.subtotal) * percent / 100).toFixed(2);
-    const grandTotal = (Number(selectedOrder.grand_total) - Number(discountAmount)).toFixed(2);
+    const subtotal = Number(selectedOrder.subtotal);
+    const discountAmount = (subtotal * percent / 100);
+    const taxableSubtotal = subtotal - discountAmount;
+    const taxAmount = (taxableSubtotal * Number(selectedOrder.tax_percent || 0) / 100);
+    const serviceAmount = (taxableSubtotal * Number(selectedOrder.service_charge_percent || 0) / 100);
+    const grandTotal = (taxableSubtotal + taxAmount + serviceAmount);
     const amountReceived = method === "credit" ? 0 : Number(amount || 0);
-    if (amountReceived > Number(grandTotal)) {
-      setError("Amount received cannot exceed the preview total.");
+    if (!Number.isFinite(amountReceived) || amountReceived < 0) {
+      setError("Enter a valid amount received.");
       return;
     }
-    const remainingCredit = (Number(grandTotal) - amountReceived).toFixed(2);
-    if (remainingCredit !== "0.00" && !customerId) {
+    if (amountReceived > grandTotal && method !== "cash") {
+      setError("Overpayment/change is supported for cash payments only.");
+      return;
+    }
+    const remainingCredit = Math.max(0, grandTotal - amountReceived);
+    const changeDue = Math.max(0, amountReceived - grandTotal);
+    if (remainingCredit > 0.001 && !customerId) {
       setError("Select a customer so the remaining amount can be added to Credit.");
       return;
     }
-    setPreview({ order: selectedOrder, discountAmount, grandTotal, amountReceived: amountReceived.toFixed(2), remainingCredit });
+    setPreview({ order: selectedOrder, discountAmount: discountAmount.toFixed(2),
+      taxAmount: taxAmount.toFixed(2), serviceAmount: serviceAmount.toFixed(2),
+      grandTotal: grandTotal.toFixed(2), amountReceived: amountReceived.toFixed(2),
+      remainingCredit: remainingCredit.toFixed(2), changeDue: changeDue.toFixed(2) });
   };
 
   const addCustomer = async () => {
@@ -138,7 +150,7 @@ export default function Billing() {
         </select>
 
         <label className="block text-sm font-medium">Payment method</label>
-          <select className="w-full border rounded-lg px-3 py-2" value={method} onChange={(e) => { setMethod(e.target.value); setPreview(null); if (e.target.value === "credit") setAmount("0"); }}>
+          <select className="w-full border rounded-lg px-3 py-2" value={method} onChange={(e) => { setMethod(e.target.value); setPreview(null); const selected = orders.find((o) => o.id === orderId); setAmount(e.target.value === "credit" ? "0" : (selected?.grand_total || "")); }}>
           <option value="cash">Cash</option><option value="card">Card</option><option value="bank_transfer">Bank Transfer</option><option value="qr">QR Payment</option><option value="credit">Credit</option>
         </select>
 
@@ -167,7 +179,7 @@ export default function Billing() {
         </div>
 
         <button onClick={previewBill} className="w-full border border-brand text-brand rounded-lg py-2 font-medium">Preview bill</button>
-          {preview && <div className="border-2 border-dashed border-brand/40 rounded-lg p-4 space-y-3"><div className="text-center"><img src="/images/logo.png" alt="Restaurant logo" className="mx-auto w-16 h-16 object-contain rounded-full" /><p className="font-semibold">{preview.order.order_number} - Table {preview.order.table_name}</p><p className="text-sm text-neutral-500">Preview only - not yet added to sales</p></div><div className="space-y-1 text-sm">{preview.order.items.map((item) => <div key={item.name} className="flex justify-between"><span>{item.quantity} x {item.name} (Rs. {item.unit_price})</span><span>Rs. {item.total}</span></div>)}{preview.order.cabin_fee && Number(preview.order.cabin_fee) > 0 && <div className="flex justify-between"><span>Cabin fee</span><span>Rs. {preview.order.cabin_fee}</span></div>}</div><div className="border-t pt-2 text-sm space-y-1"><p className="flex justify-between"><span>Subtotal</span><span>Rs. {preview.order.subtotal}</span></p><p className="flex justify-between"><span>Discount ({discountPercent}%)</span><span>- Rs. {preview.discountAmount}</span></p><p className="flex justify-between font-semibold"><span>Total</span><span>Rs. {preview.grandTotal}</span></p><p className="flex justify-between"><span>Amount received</span><span>Rs. {preview.amountReceived}</span></p><p className="flex justify-between font-semibold text-amber-700"><span>Remaining credit</span><span>Rs. {preview.remainingCredit}</span></p><p className="flex justify-between"><span>Payment method</span><span>{method}</span></p>{selectedCustomer && <p className="flex justify-between"><span>Customer</span><span>{selectedCustomer.name}</span></p>}</div><button onClick={submit} className="w-full bg-brand text-white rounded-lg py-2 font-medium">Generate Bill and add to sales</button></div>}
+          {preview && <div className="border-2 border-dashed border-brand/40 rounded-lg p-4 space-y-3"><div className="text-center"><img src="/images/logo.png" alt="Restaurant logo" className="mx-auto w-16 h-16 object-contain rounded-full" /><p className="font-semibold">{preview.order.order_number} - Table {preview.order.table_name}</p><p className="text-sm text-neutral-500">Preview only - not yet added to sales</p></div><div className="space-y-1 text-sm">{preview.order.items.map((item) => <div key={item.name} className="flex justify-between"><span>{item.quantity} x {item.name} (Rs. {item.unit_price})</span><span>Rs. {item.total}</span></div>)}{preview.order.cabin_fee && Number(preview.order.cabin_fee) > 0 && <div className="flex justify-between"><span>Cabin fee</span><span>Rs. {preview.order.cabin_fee}</span></div>}</div><div className="border-t pt-2 text-sm space-y-1"><p className="flex justify-between"><span>Subtotal</span><span>Rs. {preview.order.subtotal}</span></p><p className="flex justify-between"><span>Discount ({discountPercent}%)</span><span>- Rs. {preview.discountAmount}</span></p><p className="flex justify-between"><span>Tax</span><span>Rs. {preview.taxAmount}</span></p><p className="flex justify-between"><span>Service charge</span><span>Rs. {preview.serviceAmount}</span></p><p className="flex justify-between font-semibold"><span>Grand total</span><span>Rs. {preview.grandTotal}</span></p><p className="flex justify-between"><span>Amount tendered</span><span>Rs. {preview.amountReceived}</span></p>{Number(preview.changeDue) > 0 && <p className="flex justify-between font-semibold text-emerald-700"><span>Change due</span><span>Rs. {preview.changeDue}</span></p>}<p className="flex justify-between font-semibold text-amber-700"><span>Remaining credit</span><span>Rs. {preview.remainingCredit}</span></p><p className="flex justify-between"><span>Payment method</span><span>{method}</span></p>{selectedCustomer && <p className="flex justify-between"><span>Customer</span><span>{selectedCustomer.name}</span></p>}</div><button onClick={submit} className="w-full bg-brand text-white rounded-lg py-2 font-medium">Generate Bill and add to sales</button></div>}
         {error && <p className="text-red-600 text-sm">{error}</p>}
         {result && (
           <div id="printable-bill" className="text-sm border-t pt-4 mt-2 space-y-3">
