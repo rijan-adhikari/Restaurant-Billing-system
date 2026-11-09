@@ -43,7 +43,7 @@ const emptyForm: MenuForm = {
   is_available: true,
 };
 
-const staffRoles = ["admin", "manager", "waiter", "cashier"] as const;
+const staffRoles = ["admin", "manager", "waiter", "cashier", "kitchen", "bar"] as const;
 
 export default function Admin() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -152,6 +152,16 @@ export default function Admin() {
       setMessage("Password changed. The user must use the new password at next login.");
     } catch (e: any) {
       setError(e?.response?.data?.detail || "Could not change password.");
+    }
+  };
+
+  const updateStaff = async (userId: string, changes: { role?: string; is_active?: boolean }) => {
+    try {
+      await api.patch(`/api/users/${userId}`, changes);
+      setMessage("Staff account updated.");
+      await load();
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || "Could not update staff account.");
     }
   };
 
@@ -267,7 +277,7 @@ export default function Admin() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="text-left border-b"><th className="py-2">Name</th><th>Username</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead>
-              <tbody>{staff.map((member) => <tr key={member.id} className="border-b last:border-0"><td className="py-2">{member.full_name}</td><td>{member.username}</td><td className="capitalize">{member.role}</td><td>{member.is_active ? "Active" : "Inactive"}</td><td><div className="flex gap-2"><button type="button" onClick={() => { setPasswordUserId(member.id); setNewPassword(""); }} className="text-brand">Change password</button><button type="button" onClick={() => removeStaff(member.id)} className="text-red-700">Remove</button></div>{passwordUserId === member.id && <div className="flex gap-2 mt-2"><input type="password" minLength={6} placeholder="New password" className="border rounded px-2 py-1" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /><button type="button" onClick={() => changePassword(member.id)} className="bg-brand text-white rounded px-2 py-1">Save</button></div>}</td></tr>)}</tbody>
+              <tbody>{staff.map((member) => <tr key={member.id} className="border-b last:border-0"><td className="py-2">{member.full_name}</td><td>{member.username}</td><td><select className="border rounded px-2 py-1 capitalize" value={member.role} onChange={(e) => updateStaff(member.id, { role: e.target.value })}>{staffRoles.map((role) => <option key={role} value={role}>{role}</option>)}</select></td><td><button type="button" onClick={() => updateStaff(member.id, { is_active: !member.is_active })} className={member.is_active ? "text-emerald-700" : "text-red-700"}>{member.is_active ? "Active · disable" : "Inactive · enable"}</button></td><td><div className="flex gap-2"><button type="button" onClick={() => { setPasswordUserId(member.id); setNewPassword(""); }} className="text-brand">Change password</button><button type="button" onClick={() => removeStaff(member.id)} className="text-red-700">Disable</button></div>{passwordUserId === member.id && <div className="flex gap-2 mt-2"><input type="password" minLength={6} placeholder="New password" className="border rounded px-2 py-1" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /><button type="button" onClick={() => changePassword(member.id)} className="bg-brand text-white rounded px-2 py-1">Save</button></div>}</td></tr>)}</tbody>
             </table>
           </div>
         </div>
