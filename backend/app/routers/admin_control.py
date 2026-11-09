@@ -228,6 +228,16 @@ def close_cash_shift(shift_id: str, payload: ShiftClose, db: Session = Depends(g
     return dict(row)
 
 
+@router.get("/refundable-bills")
+def refundable_bills(db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    rows = db.execute(text("""SELECT b.id,b.bill_number,b.created_at,b.grand_total,b.amount_paid,
+        b.amount_paid-COALESCE(SUM(r.amount),0) refundable_amount
+        FROM bills b LEFT JOIN bill_refunds r ON r.bill_id=b.id
+        GROUP BY b.id HAVING b.amount_paid-COALESCE(SUM(r.amount),0)>0
+        ORDER BY b.created_at DESC LIMIT 300""")).mappings().all()
+    return [dict(row) for row in rows]
+
+
 @router.get("/refunds")
 def list_refunds(start: date | None = None, end: date | None = None,
                  db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
