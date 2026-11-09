@@ -4,7 +4,7 @@ Run inside the backend container: `docker compose exec backend python seed.py`
 
 Creates DEMO credentials only - force password change before real use.
 """
-from app.database import Base, engine, SessionLocal
+from decimal import Decimal\n\nfrom app.database import Base, engine, SessionLocal
 from app import models
 from app.security import hash_password
 
