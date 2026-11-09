@@ -348,6 +348,16 @@ def supplier_ledger(supplier_id: str | None = None, db: Session = Depends(get_db
     return [dict(row) for row in rows]
 
 
+@router.get("/suppliers/balances")
+def supplier_balances(db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    rows = db.execute(text("""SELECT s.id,s.name,s.phone,
+        COALESCE(SUM(CASE WHEN l.entry_type IN ('purchase','adjustment') THEN l.amount
+                          WHEN l.entry_type IN ('payment','return') THEN -l.amount ELSE 0 END),0) balance
+        FROM suppliers s LEFT JOIN supplier_ledger l ON l.supplier_id=s.id
+        WHERE s.is_active=TRUE GROUP BY s.id,s.name,s.phone ORDER BY balance DESC,s.name""")).mappings().all()
+    return [dict(row) for row in rows]
+
+
 @router.post("/suppliers/ledger")
 def add_supplier_ledger_entry(payload: SupplierEntry, db: Session = Depends(get_db),
                               user=Depends(require_roles(*MANAGERS))):
