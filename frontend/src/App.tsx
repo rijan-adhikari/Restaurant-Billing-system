@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Routes, Route, Navigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
+import { useLanguage } from "./context/LanguageContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -16,17 +17,18 @@ import AdminControl from "./pages/AdminControl";
 
 function Shell({ children }: { children: React.ReactNode }) {
   const { fullName, role, logout } = useAuth();
+  const { language, setLanguage, t } = useLanguage();
   const location = useLocation();
   const [logoAvailable, setLogoAvailable] = useState(true);
 
   const nav = [
-    ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/dashboard", label: "Dashboard" }] : []),
-    { to: "/tables", label: "Tables / POS" },
-    ...(["admin", "manager"].includes(role || "") ? [{ to: "/kitchen", label: "Kitchen" }, { to: "/bar", label: "Bar" }] : []),
-    ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/billing", label: "Billing" }] : []),
-    ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/credit", label: "Credit" }] : []),
-    ...(["admin", "manager"].includes(role || "") ? [{ to: "/operations", label: "Restaurant Operations" }] : []),
-    ...(role === "admin" ? [{ to: "/admin", label: "Master Panel" }, { to: "/admin-control", label: "Control Centre" }] : []),
+    ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/dashboard", label: t("Dashboard") }] : []),
+    { to: "/tables", label: t("Tables / POS") },
+    ...(["admin", "manager"].includes(role || "") ? [{ to: "/kitchen", label: t("Kitchen") }, { to: "/bar", label: t("Bar") }] : []),
+    ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/billing", label: t("Billing") }] : []),
+    ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/credit", label: t("Credit") }] : []),
+    ...(["admin", "manager"].includes(role || "") ? [{ to: "/operations", label: t("Restaurant Operations") }] : []),
+    ...(role === "admin" ? [{ to: "/admin", label: t("Master Panel") }, { to: "/admin-control", label: t("Control Centre") }] : []),
   ];
 
   return (
@@ -51,12 +53,12 @@ function Shell({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
         <button onClick={logout} className="mt-3 md:mt-6 shrink-0 rounded-xl border border-white/15 px-3 py-2.5 text-sm text-white/75 hover:bg-white/10 hover:text-white text-left">
-          Log out
+          {t("Log out")}
         </button>
       </aside>
       <main className="relative min-w-0 flex-1 p-4 md:p-7 overflow-hidden flex flex-col">
         {logoAvailable && <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center"><img src="/images/logo.png" alt="" className="max-w-[42%] max-h-[42%] object-contain rounded-full opacity-[0.035]" onError={() => setLogoAvailable(false)} /></div>}
-        <div className="relative z-10 flex-1 w-full">{children}</div>
+        <div className="relative z-10 flex-1 w-full"><div className="flex justify-end mb-4"><label className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm shadow-sm"><span className="text-neutral-500">{t("Language")}</span><select aria-label="Select language" className="bg-transparent font-medium outline-none" value={language} onChange={(event) => setLanguage(event.target.value as "en" | "ne")}><option value="en">English</option><option value="ne">नेपाली</option></select></label></div>{children}</div>
         <footer className="relative z-10 text-center text-[11px] tracking-[0.18em] text-neutral-400 pt-8">ROYAL SKYE · DEVELOPED BY RIJAN ADHIKARI</footer>
       </main>
     </div>
