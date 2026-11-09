@@ -12,6 +12,7 @@ import Billing from "./pages/Billing";
 import Admin from "./pages/Admin";
 import Credit from "./pages/Credit";
 import Operations from "./pages/Operations";
+import AdminControl from "./pages/AdminControl";
 
 function Shell({ children }: { children: React.ReactNode }) {
   const { fullName, role, logout } = useAuth();
@@ -25,7 +26,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/billing", label: "Billing" }] : []),
     ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/credit", label: "Credit" }] : []),
     ...(["admin", "manager"].includes(role || "") ? [{ to: "/operations", label: "Restaurant Operations" }] : []),
-    ...(role === "admin" ? [{ to: "/admin", label: "Master Panel" }] : []),
+    ...(role === "admin" ? [{ to: "/admin", label: "Master Panel" }, { to: "/admin-control", label: "Control Centre" }] : []),
   ];
 
   return (
@@ -137,6 +138,14 @@ export default function App() {
         element={
           <ProtectedRoute allowedRoles={["admin"]}>
             <Shell><Admin /></Shell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin-control"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <Shell><AdminControl /></Shell>
           </ProtectedRoute>
         }
       />
