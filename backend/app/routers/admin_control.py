@@ -10,7 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app import models
-
+from app.database import get_db
 from app.deps import require_roles
 
 router = APIRouter(prefix="/api/admin", tags=["administration"])
@@ -19,7 +19,7 @@ MANAGERS = (models.RoleName.admin, models.RoleName.manager)
 CASHIERS = (models.RoleName.admin, models.RoleName.manager, models.RoleName.cashier)
 
 
-f audit(db: Session, user_id: str, action: str, details: str = "") -> None:
+def audit(db: Session, user_id: str, action: str, details: str = "") -> None:
     db.execute(text("INSERT INTO audit_logs(user_id,action,details) VALUES(:user,:action,:details)"),
                {"user": user_id, "action": action, "details": details})
 
