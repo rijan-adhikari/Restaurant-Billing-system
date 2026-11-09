@@ -23,34 +23,11 @@ interface CustomerHistory {
     items: Array<{ name: string; quantity: number; unit_price: string; total: string }>;
   }>;
 }
-interface MenuItem {
-  id: string;
-  category_id: string;
-  name: string;
-  description: string;
-  price: string;
-  destination: "kitchen" | "bar";
-  is_available: boolean;
-}
-
-type MenuForm = Omit<MenuItem, "id">;
-
-const emptyForm: MenuForm = {
-  category_id: "",
-  name: "",
-  description: "",
-  price: "",
-  destination: "kitchen",
-  is_available: true,
-};
-
 const staffRoles = ["admin", "manager", "waiter", "cashier", "kitchen", "bar"] as const;
 
 export default function Admin() {
   const { t } = useLanguage();
   const [categories, setCategories] = useState<Category[]>([]);
-  const [items, setItems] = useState<MenuItem[]>([]);
-  const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
   const [staff, setStaff] = useState<Staff[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -62,29 +39,23 @@ export default function Admin() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [staffForm, setStaffForm] = useState({ username: "", full_name: "", password: "", role: "waiter" });
   const [createdCredentials, setCreatedCredentials] = useState<{ username: string; password: string } | null>(null);
-  const [showMenu, setShowMenu] = useState(false);
   const [passwordUserId, setPasswordUserId] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
-  const [form, setForm] = useState<MenuForm>(emptyForm);
   const [categoryName, setCategoryName] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   const load = async () => {
     const [categoryResponse, itemResponse, staffResponse, customerResponse, expenseResponse] = await Promise.all([
       api.get("/api/categories"),
-      api.get("/api/menu-items"),
       api.get("/api/users"),
       api.get("/api/customers"),
       api.get("/api/expenses"),
     ]);
     setCategories(categoryResponse.data);
-    setItems(itemResponse.data);
     setStaff(staffResponse.data);
     setCustomers(customerResponse.data);
     setExpenses(expenseResponse.data);
-    setForm((current) => ({ ...current, category_id: current.category_id || categoryResponse.data[0]?.id || "" }));
   };
 
   const searchHistory = async () => {
@@ -142,14 +113,14 @@ export default function Admin() {
   };
 
 
-  const deleteMenuItem = async (item: MenuItem) => {
-    if (!window.confirm(`Remove "${item.name}" from the menu? If it has order history, it will be hidden rather than erased.`)) return;
+  const removeAllDishes = async () => {
+    if (!window.confirm(t("Remove every dish from the POS menu? Categories and past order history will be kept."))) return;
     try {
-      const response = await api.delete(`/api/menu-items/${item.id}`);
-      setMessage(response.data?.message || "Menu item removed.");
+      const response = await api.delete("/api/menu-items");
+      setMessage(t("All dishes have been removed. Categories are still available.") + ` ${response.data?.removed ?? 0} removed, ${response.data?.archived ?? 0} historical items hidden.`);
       await load();
     } catch (e: any) {
-      setError(e?.response?.data?.detail || "Could not remove menu item.");
+      setError(e?.response?.data?.detail || "Could not remove dishes.");
     }
   };
 
@@ -216,9 +187,6 @@ export default function Admin() {
     load().catch(() => setError("Could not load menu data."));
   }, []);
 
-  const updateForm = (field: keyof MenuForm, value: string | boolean) => {
-    setForm((current) => ({ ...current, [field]: value }));
-  };
 
   const addCategory = async () => {
     if (!categoryName.trim()) return;
@@ -232,67 +200,12 @@ export default function Admin() {
     }
   };
 
-  const save = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setError("");
-    setMessage("");
-    try {
-      const payload = { ...form, price: Number(form.price) };
-      if (editingId) {
-        await api.patch(`/api/menu-items/${editingId}`, payload);
-        setMessage("Food item updated.");
-      } else {
-        await api.post("/api/menu-items", payload);
-        setMessage("Food item added to the menu.");
-      }
-      setEditingId(null);
-      setForm({ ...emptyForm, category_id: categories[0]?.id || "" });
-      await load();
-    } catch (e: any) {
-      setError(e?.response?.data?.detail || "Could not save food item.");
-    }
-  };
-
-  const edit = (item: MenuItem) => {
-    setEditingId(item.id);
-    setForm({
-      category_id: item.category_id,
-      name: item.name,
-      description: item.description,
-      price: item.price,
-      destination: item.destination,
-      is_available: item.is_available,
-    });
-    setMessage("");
-  };
-
-  const savePrice = async (item: MenuItem) => {
-    const price = Number(priceDrafts[item.id] ?? item.price);
-    if (!Number.isFinite(price) || price < 0) {
-      setError("Enter a valid non-negative price.");
-      return;
-    }
-    try {
-      await api.patch(`/api/menu-items/${item.id}`, {
-        category_id: item.category_id,
-        name: item.name,
-        description: item.description,
-        price,
-        destination: item.destination,
-        is_available: item.is_available,
-      });
-      setMessage(`${item.name} price updated.`);
-      await load();
-    } catch (e: any) {
-      setError(e?.response?.data?.detail || "Could not update price.");
-    }
-  };
 
   return (
     <div className="max-w-6xl flex flex-col space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">{t("Master Panel")}</h1>
-        <p className="text-sm text-neutral-500 mt-1">{t("Manage food, prices, routing, and availability.")}</p>
+        <p className="text-sm text-neutral-500 mt-1">{t("Manage categories, staff, customers, and expenses.")}</p>
       </div>
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
       </div>
@@ -320,29 +233,21 @@ export default function Admin() {
       </section>
 
       <section className="bg-white rounded-xl shadow p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold">{t("Food menu")}</h2>
-          <button type="button" onClick={() => setShowMenu((current) => !current)} className="border rounded-lg px-3 py-1.5 text-sm">
-            {showMenu ? t("Hide food menu") : t("Show food menu")}
-          </button>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 className="font-semibold">{t("Categories")}</h2>
+            <p className="text-sm text-neutral-500 mt-1">{t("Keep your categories ready. Dishes can be added later when needed.")}</p>
+          </div>
+          <button type="button" onClick={removeAllDishes} className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50">{t("Remove all dishes")}</button>
         </div>
-        {showMenu && <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead><tr className="text-left border-b"><th className="py-2">{t("Food")}</th><th>{t("Category")}</th><th>{t("Price (NPR)")}</th><th>{t("Status")}</th><th /></tr></thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.id} className="border-b last:border-0">
-                  <td className="py-3"><div className="font-medium">{item.name}</div><div className="text-xs text-neutral-500">{item.destination}</div></td>
-                  <td>{categories.find((category) => category.id === item.category_id)?.name || "-"}</td>
-                  <td><div className="flex items-center gap-2"><input type="number" min="0" step="0.01" className="w-24 border rounded px-2 py-1" value={priceDrafts[item.id] ?? item.price} onChange={(e) => setPriceDrafts((current) => ({ ...current, [item.id]: e.target.value }))} /><button type="button" onClick={() => savePrice(item)} className="text-brand font-medium">{t("Save")}</button></div></td>
-                  <td><span className={item.is_available ? "text-green-700" : "text-neutral-400"}>{item.is_available ? t("Available") : t("Unavailable")}</span></td>
-                  <td className="text-right"><div className="flex justify-end gap-3"><button onClick={() => edit(item)} className="text-brand font-medium">{t("Edit")}</button><button type="button" onClick={() => deleteMenuItem(item)} className="text-red-700 font-medium">{t("Delete")}</button></div></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>}
-        {!showMenu && <p className="text-sm text-neutral-500">Food menu is hidden. Click “Show food menu” to view and edit items.</p>}
+        <div className="flex flex-wrap gap-2">
+          <input className="min-w-0 flex-1 border rounded-lg px-3 py-2" placeholder={t("New category name")} value={categoryName} onChange={(e) => setCategoryName(e.target.value)} />
+          <button type="button" onClick={addCategory} className="border border-brand text-brand rounded-lg px-4 py-2 text-sm font-medium">{t("Add category")}</button>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {categories.map((category) => <span key={category.id} className="inline-flex items-center gap-2 rounded-lg bg-neutral-100 px-3 py-2 text-sm">{category.name}<button type="button" aria-label={`Delete ${category.name}`} onClick={() => deleteCategory(category)} className="font-medium text-red-700">{t("Delete")}</button></span>)}
+          {categories.length === 0 && <p className="text-sm text-neutral-500">{t("No categories yet. Add your first category above.")}</p>}
+        </div>
       </section>
 
       <section className="bg-white rounded-xl shadow p-5">
@@ -359,21 +264,7 @@ export default function Admin() {
         </div>
       </section>
 
-      <section className="order-last bg-white rounded-xl shadow p-5">
-        <h2 className="font-semibold mb-4">{editingId ? t("Edit food item") : t("Add food item")}</h2>
-        <form onSubmit={save} className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 items-end">
-          <label className="block text-sm font-medium">{t("Category")}<select required className="w-full border rounded-lg px-3 py-2 mt-1" value={form.category_id} onChange={(e) => updateForm("category_id", e.target.value)}><option value="">{t("Select category")}</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
-          <div className="flex gap-2"><input className="min-w-0 flex-1 border rounded-lg px-3 py-2" placeholder={t("New category name")} value={categoryName} onChange={(e) => setCategoryName(e.target.value)} /><button type="button" onClick={addCategory} className="border border-brand text-brand rounded-lg px-3 py-2 text-sm">{t("Add category")}</button></div><div className="md:col-span-2 flex flex-wrap gap-2">{categories.map((category) => <span key={category.id} className="inline-flex items-center gap-2 rounded-lg bg-neutral-100 px-3 py-1.5 text-xs">{category.name}<button type="button" aria-label={`Delete ${category.name}`} onClick={() => deleteCategory(category)} className="font-medium text-red-700">{t("Delete")}</button></span>)}</div>
-          <label className="block text-sm font-medium">{t("Food name")}<input required className="w-full border rounded-lg px-3 py-2 mt-1" value={form.name} onChange={(e) => updateForm("name", e.target.value)} /></label>
-          <label className="block text-sm font-medium">{t("Description")}<textarea className="w-full border rounded-lg px-3 py-2 mt-1" value={form.description} onChange={(e) => updateForm("description", e.target.value)} /></label>
-          <label className="block text-sm font-medium">{t("Price (NPR)")}<input required min="0" step="0.01" type="number" className="w-full border rounded-lg px-3 py-2 mt-1" value={form.price} onChange={(e) => updateForm("price", e.target.value)} /></label>
-          <label className="block text-sm font-medium">{t("Send order to")}<select className="w-full border rounded-lg px-3 py-2 mt-1" value={form.destination} onChange={(e) => updateForm("destination", e.target.value)}><option value="kitchen">{t("Kitchen")}</option><option value="bar">{t("Bar")}</option></select></label>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.is_available} onChange={(e) => updateForm("is_available", e.target.checked)} /> {t("Available for POS orders")}</label>
-          <div className="flex gap-2"><button type="submit" className="bg-brand text-white rounded-lg py-2 px-5 font-medium">{editingId ? t("Save changes") : t("Add food")}</button>{editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ ...emptyForm, category_id: categories[0]?.id || "" }); }} className="px-3 border rounded-lg">{t("Cancel")}</button>}</div>
-        </form>
-        {message && <p className="text-sm text-green-700 mt-3">{message}</p>}
-        {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
-      </section>
+      {(message || error) && <div className="rounded-lg bg-white p-4 shadow-sm">{message && <p className="text-sm text-green-700">{message}</p>}{error && <p className="text-sm text-red-600">{error}</p>}</div>}
 
       <section className="bg-white rounded-xl shadow p-5">
         <h2 className="font-semibold mb-3">{t("Customer records")}</h2>
