@@ -86,8 +86,12 @@ def list_users(db: Session = Depends(get_db), user=Depends(require_roles(models.
 @router.post("/users", response_model=schemas.UserOut)
 def create_user(payload: schemas.UserCreate, db: Session = Depends(get_db),
                  user=Depends(require_roles(models.RoleName.admin))):
+    if len(payload.password) < 8:
+        raise HTTPException(status_code=422, detail="Temporary password must be at least 8 characters")
+    if db.query(models.User).filter(models.User.username == payload.username.strip()).first():
+        raise HTTPException(status_code=409, detail="Username is already in use")
     new_user = models.User(
-        username=payload.username, full_name=payload.full_name,
+        username=payload.username.strip(), full_name=payload.full_name.strip(),
         password_hash=hash_password(payload.password), role=payload.role,
         must_change_password=True,
     )
@@ -146,6 +150,12 @@ def remove_user(user_id: str, db: Session = Depends(get_db),
     target = db.query(models.User).filter(models.User.id == user_id, models.User.is_active.is_(True)).first()
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    if target.role == models.RoleName.admin:
+        active_admins = db.query(models.User).filter(
+            models.User.role == models.RoleName.admin, models.User.is_active.is_(True)
+        ).count()
+        if active_admins <= 1:
+            raise HTTPException(status_code=409, detail="At least one active admin account must remain")
     target.is_active = False
     db.add(models.AuditLog(user_id=user.id, action="user.disable", details=f"Disabled account {target.username}"))
     db.commit()
