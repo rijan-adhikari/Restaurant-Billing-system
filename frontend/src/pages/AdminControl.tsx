@@ -35,7 +35,7 @@ export default function AdminControl() {
       ["refunds", "/api/admin/refunds"], ["bills", "/api/admin/refundable-bills"],
       ["suppliers", "/api/operations/suppliers"], ["ledger", "/api/admin/suppliers/ledger"],
       ["loyalty", "/api/admin/loyalty/accounts"], ["loyaltySettings", "/api/admin/loyalty/settings"],
-      ["audit", "/api/admin/audit"], ["tax", "/api/settings/tax"], ["restaurant", "/api/settings/restaurant"],
+      ["audit", "/api/admin/audit"], ["customers", "/api/customers"], ["tax", "/api/settings/tax"], ["restaurant", "/api/settings/restaurant"],
     ] as const;
     const results = await Promise.allSettled(requests.map(([, url]) => api.get(url)));
     const next: any = {};
