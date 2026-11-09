@@ -168,6 +168,8 @@ def cancel_order(order_id: str, db: Session = Depends(get_db),
             kot.status = models.KOTStatus.cancelled
     if order.table:
         order.table.status = models.TableStatus.available
+    db.execute(text("UPDATE order_service_details SET status='cancelled',updated_at=NOW() WHERE order_id=:id"),
+               {"id": order.id})
     db.commit()
     return {"ok": True, "order_id": order.id}
 
