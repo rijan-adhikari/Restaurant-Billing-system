@@ -10,6 +10,7 @@ from app.database import get_db
 from app import models, schemas
 from app.deps import get_current_user, require_roles
 from app.websocket import manager
+from app.billing_math import calculate_bill
 
 router = APIRouter(prefix="/api", tags=["orders-kot"])
 CABIN_SURCHARGE_RATE = Decimal("0.05")
@@ -87,16 +88,22 @@ def list_open_orders(db: Session = Depends(get_db),
         subtotal = sum((Decimal(item.unit_price) * item.quantity for item in order.items if not item.is_cancelled), Decimal("0"))
         if order.table and "cabin" in order.table.name.lower():
             subtotal += CABIN_FEE
-        tax = Decimal("0")
-        if tax_setting and tax_setting.tax_enabled:
-            tax = (subtotal * Decimal(tax_setting.tax_percent) / Decimal("100")).quantize(Decimal("0.01"))
-        grand_total = subtotal + tax
+        tax_enabled = bool(tax_setting and tax_setting.tax_enabled)
+        tax_percent = Decimal(tax_setting.tax_percent) if tax_setting else Decimal("0")
+        service_enabled = bool(tax_setting and tax_setting.service_charge_enabled)
+        service_percent = Decimal(tax_setting.service_charge_percent) if tax_setting else Decimal("0")
+        totals = calculate_bill(subtotal, Decimal("0"), tax_enabled, tax_percent,
+                                service_enabled, service_percent)
         result.append({
             "id": order.id,
             "order_number": order.order_number,
             "table_name": order.table.name if order.table else "",
-            "subtotal": str(subtotal.quantize(Decimal("0.01"))),
-            "grand_total": str(grand_total.quantize(Decimal("0.01"))),
+            "subtotal": str(totals["subtotal"]),
+            "tax_amount": str(totals["tax_amount"]),
+            "tax_percent": str(tax_percent),
+            "service_charge_amount": str(totals["service_charge_amount"]),
+            "service_charge_percent": str(service_percent),
+            "grand_total": str(totals["grand_total"]),
             "cabin_fee": str(CABIN_FEE) if order.table and "cabin" in order.table.name.lower() else "0.00",
             "items": [{
                 "name": item.menu_item.name,
