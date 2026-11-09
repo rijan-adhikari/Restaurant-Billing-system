@@ -10,6 +10,8 @@ interface TableRow { id: string; floor_id: string; name: string; status: string;
 export default function POS() {
   const [params] = useSearchParams();
   const tableId = params.get("table") || "";
+  const serviceType = params.get("service") || "dine_in";
+  const isServiceOrder = serviceType !== "dine_in";
   const [tables, setTables] = useState<TableRow[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<MenuItem[]>([]);
@@ -20,6 +22,10 @@ export default function POS() {
   const [message, setMessage] = useState("");
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [taxSettings, setTaxSettings] = useState({ tax_enabled: false, tax_percent: "0", service_charge_enabled: false, service_charge_percent: "0" });
+  const [serviceCustomerName, setServiceCustomerName] = useState("");
+  const [servicePhone, setServicePhone] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryFee, setDeliveryFee] = useState("0");
 
   const selectedTable = tables.find((t) => t.id === tableId);
   const isCabinOrder = Boolean(selectedTable && /cabin/i.test(selectedTable.name));
@@ -57,18 +63,25 @@ export default function POS() {
 
   const itemSubtotal = roundMoney(cart.reduce((sum, l) => sum + l.price * l.quantity, 0));
   const cabinFee = isCabinOrder ? 500 : 0;
-  const subtotal = roundMoney(itemSubtotal + cabinFee);
+  const effectiveDeliveryFee = serviceType === "delivery" ? Math.max(0, Number(deliveryFee || 0)) : 0;
+  const subtotal = roundMoney(itemSubtotal + cabinFee + effectiveDeliveryFee);
   const taxAmount = taxSettings.tax_enabled ? roundMoney(subtotal * Number(taxSettings.tax_percent) / 100) : 0;
   const serviceAmount = taxSettings.service_charge_enabled ? roundMoney(subtotal * Number(taxSettings.service_charge_percent) / 100) : 0;
   const total = roundMoney(subtotal + taxAmount + serviceAmount);
 
   const sendKOT = async () => {
-    if (!tableId || cart.length === 0) return;
+    if ((serviceType === "dine_in" && !tableId) || cart.length === 0) return;
+    if (serviceType === "delivery" && !deliveryAddress.trim()) { setMessage("Enter the delivery address first."); return; }
     setSending(true);
     setMessage("");
     try {
       const response = await api.post("/api/orders", {
-        table_id: tableId,
+        table_id: tableId || null,
+        service_type: serviceType,
+        customer_name: serviceCustomerName || null,
+        phone: servicePhone || null,
+        delivery_address: serviceType === "delivery" ? deliveryAddress : null,
+        delivery_fee: effectiveDeliveryFee,
         items: cart.map((l) => ({ menu_item_id: l.menu_item_id, quantity: l.quantity, notes: l.notes })),
       });
       setActiveOrderId(response.data.id);
@@ -103,7 +116,15 @@ export default function POS() {
   return (
     <div className="mx-auto grid max-w-7xl grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_390px]">
       <div className="min-w-0">
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">Royal Skye · Point of Sale</p><h1 className="mt-1 text-2xl font-bold">Take an order</h1><p className="text-sm text-neutral-500">{selectedTable ? "Table " + selectedTable.name + " · " + selectedTable.capacity + " seats" : "Select a table before opening the POS"}</p></div>{isCabinOrder && <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">Cabin pricing applies</span>}</div>
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">Royal Skye · Point of Sale</p><h1 className="mt-1 text-2xl font-bold">Take an order</h1><p className="text-sm text-neutral-500">{selectedTable ? "Table " + selectedTable.name + " · " + selectedTable.capacity + " seats" : isServiceOrder ? serviceType === "delivery" ? "Delivery order" : "Takeaway order" : "Select a table before opening the POS"}</p></div>{isCabinOrder && <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">Cabin pricing applies</span>}</div>
+        {isServiceOrder && <div className="mb-4 grid gap-3 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm sm:grid-cols-2">
+          <label className="block text-xs font-medium text-neutral-600">Customer name<input className="mt-1 w-full rounded-lg border px-3 py-2 text-sm" value={serviceCustomerName} onChange={e => setServiceCustomerName(e.target.value)} placeholder="Customer name" /></label>
+          <label className="block text-xs font-medium text-neutral-600">Phone<input className="mt-1 w-full rounded-lg border px-3 py-2 text-sm" value={servicePhone} onChange={e => setServicePhone(e.target.value)} placeholder="Contact number" /></label>
+          {serviceType === "delivery" && <>
+            <label className="block text-xs font-medium text-neutral-600 sm:col-span-2">Delivery address<input required className="mt-1 w-full rounded-lg border px-3 py-2 text-sm" value={deliveryAddress} onChange={e => setDeliveryAddress(e.target.value)} placeholder="Full delivery address / landmark" /></label>
+            <label className="block text-xs font-medium text-neutral-600">Delivery fee (NPR)<input type="number" min="0" step="0.01" className="mt-1 w-full rounded-lg border px-3 py-2 text-sm" value={deliveryFee} onChange={e => setDeliveryFee(e.target.value)} /></label>
+          </>}
+        </div>}
         <input
           placeholder="Search items..."
           className="mb-3 w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 shadow-sm focus:border-brand"
@@ -166,7 +187,7 @@ export default function POS() {
         </div>
         <div className="mt-4 space-y-2 border-t pt-4 text-sm">
           <div className="flex justify-between"><span className="text-neutral-500">Items subtotal</span><span>Rs. {itemSubtotal.toFixed(2)}</span></div>
-          {isCabinOrder && <div className="flex justify-between"><span className="text-neutral-500">Cabin fee</span><span>Rs. {cabinFee.toFixed(2)}</span></div>}
+          {isCabinOrder && <div className="flex justify-between"><span className="text-neutral-500">Cabin fee</span><span>Rs. {cabinFee.toFixed(2)}</span></div>}{effectiveDeliveryFee > 0 && <div className="flex justify-between"><span className="text-neutral-500">Delivery fee</span><span>Rs. {effectiveDeliveryFee.toFixed(2)}</span></div>}
           <div className="flex justify-between"><span className="text-neutral-500">Subtotal</span><span>Rs. {subtotal.toFixed(2)}</span></div>
           {taxSettings.tax_enabled && <div className="flex justify-between"><span className="text-neutral-500">Tax ({taxSettings.tax_percent}%)</span><span>Rs. {taxAmount.toFixed(2)}</span></div>}
           {taxSettings.service_charge_enabled && <div className="flex justify-between"><span className="text-neutral-500">Service charge ({taxSettings.service_charge_percent}%)</span><span>Rs. {serviceAmount.toFixed(2)}</span></div>}
@@ -174,7 +195,7 @@ export default function POS() {
           <p className="text-[11px] text-neutral-400">Final amount is confirmed at billing. Discounts and any customer credit are handled at checkout.</p>
         </div>
         <button
-          disabled={sending || cart.length === 0}
+          disabled={sending || cart.length === 0 || (serviceType === "dine_in" && !tableId)}
           onClick={sendKOT}
           className="w-full bg-brand hover:bg-brand-light disabled:opacity-50 text-white rounded-lg py-2 font-medium"
         >
