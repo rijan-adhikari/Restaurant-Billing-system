@@ -2,6 +2,7 @@ from datetime import date, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from app.database import get_db
 from app import models, schemas
@@ -82,6 +83,10 @@ def delete_customer(customer_id: str, db: Session = Depends(get_db),
         raise HTTPException(409, "This customer has bill history. The record is protected to preserve financial history.")
     if db.query(models.CustomerBalance).filter(models.CustomerBalance.customer_id == customer_id).first():
         raise HTTPException(409, "This customer has a credit balance history and cannot be deleted.")
+    loyalty_table = db.execute(text("SELECT to_regclass('public.loyalty_accounts')")).scalar()
+    if loyalty_table and db.execute(text("SELECT 1 FROM loyalty_accounts WHERE customer_id=:id LIMIT 1"),
+                                   {"id": customer_id}).first():
+        raise HTTPException(409, "This customer has loyalty points history and cannot be deleted.")
     db.add(models.AuditLog(user_id=user.id, action="customer.deleted", details=f"Deleted customer {customer.name}"))
     db.delete(customer)
     db.commit()
