@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import Base, engine
-from app.routers import auth, floors, menu, orders, billing, customers, credit, dashboard, expenses, settings as settings_router
+from app.routers import auth, floors, menu, orders, billing, customers, credit, dashboard, expenses, settings as settings_router, operations
 
 app = FastAPI(title="Royal Skye Birds POS API", version="0.1.0")
 
@@ -25,12 +25,14 @@ app.include_router(credit.router)
 app.include_router(dashboard.router)
 app.include_router(expenses.router)
 app.include_router(settings_router.router)
+app.include_router(operations.router)
 
 
 @app.on_event("startup")
 def on_startup():
     # Phase 1: create tables directly. Move to Alembic migrations before production use.
     Base.metadata.create_all(bind=engine)
+    operations.init_operations_schema()
 
 
 @app.get("/api/health")

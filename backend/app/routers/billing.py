@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from app.database import get_db
 from app import models, schemas
@@ -23,9 +24,12 @@ def _next_bill_number() -> str:
 def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
                 user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager,
                                             models.RoleName.cashier))):
-    order = db.query(models.Order).filter(models.Order.id == payload.order_id).first()
+    order = db.query(models.Order).filter(models.Order.id == payload.order_id).with_for_update().first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+
+    if db.query(models.Bill).filter(models.Bill.order_id == order.id).first():
+        raise HTTPException(status_code=409, detail="This order has already been billed")
 
     subtotal = sum(
         (Decimal(i.unit_price) * i.quantity for i in order.items if not i.is_cancelled),
@@ -77,6 +81,29 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
     order.status = models.OrderStatus.completed
     if order.table:
         order.table.status = models.TableStatus.available
+
+    # Deduct recipe ingredients atomically with bill creation. Orders without recipes remain billable.
+    for order_item in order.items:
+        if order_item.is_cancelled:
+            continue
+        recipe = db.execute(text("SELECT id,yield_quantity FROM recipes WHERE menu_item_id=:menu_id"),
+                            {"menu_id": order_item.menu_item_id}).mappings().first()
+        if not recipe:
+            continue
+        ingredients = db.execute(text("""SELECT ri.item_id,ri.quantity,i.name,i.unit,i.quantity stock_quantity,
+            i.average_cost FROM recipe_items ri JOIN inventory_items i ON i.id=ri.item_id
+            WHERE ri.recipe_id=:recipe_id FOR UPDATE OF i"""), {"recipe_id": recipe["id"]}).mappings().all()
+        for ingredient in ingredients:
+            used = Decimal(str(ingredient["quantity"])) * order_item.quantity / Decimal(str(recipe["yield_quantity"]))
+            available = Decimal(str(ingredient["stock_quantity"]))
+            if available < used:
+                raise HTTPException(status_code=409, detail="Insufficient stock for " + ingredient["name"] + ": need " + str(used) + " " + ingredient["unit"] + ", have " + str(available))
+            db.execute(text("UPDATE inventory_items SET quantity=quantity-:used,updated_at=NOW() WHERE id=:id"),
+                       {"used": used, "id": ingredient["item_id"]})
+            db.execute(text("""INSERT INTO stock_movements(item_id,movement_type,quantity,unit_cost,reference,notes,created_by)
+                VALUES(:item,'consumption',:qty,:cost,:reference,:notes,:user)"""),
+                {"item": ingredient["item_id"], "qty": used, "cost": ingredient["average_cost"],
+                 "reference": bill.bill_number, "notes": "Recipe consumption on bill " + bill.bill_number, "user": user.id})
 
     db.commit()
     db.refresh(bill)
