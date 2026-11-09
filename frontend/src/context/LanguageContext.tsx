@@ -38,7 +38,14 @@ const translations: Record<string, string> = {
   "Customer records": "ग्राहक विवरण", "See what each customer ordered and spent during a selected date range.": "छानिएको मितिमा ग्राहकले के अर्डर गरे र कति खर्च गरे हेर्नुहोस्।",
   "Loading...": "लोड हुँदैछ...", "No customer records.": "ग्राहक विवरण छैन।", "No expenses recorded.": "खर्च विवरण छैन।",
   "No phone": "फोन छैन", "Total spent:": "जम्मा खर्च:", "Paid:": "तिरेको:", "Outstanding:": "बाँकी:",
-  "Choose filters and click Search history to view customer visits.": "ग्राहकको भ्रमण हेर्न मिति छानेर खोज्नुहोस्।"
+  "Choose filters and click Search history to view customer visits.": "ग्राहकको भ्रमण हेर्न मिति छानेर खोज्नुहोस्।",
+  "Add staff account": "कर्मचारी खाता थप्नुहोस्",
+  "This password is shown once and is not stored for display.": "यो पासवर्ड एक पटक मात्र देखाइन्छ।",
+  "Price": "मूल्य", "Table": "टेबल", "Paid": "तिरेको", "Outstanding": "बाँकी",
+  "Expense category": "खर्चको वर्ग", "General": "सामान्य", "Select customer": "ग्राहक छान्नुहोस्",
+  "Remove": "हटाउनुहोस्",
+  "Could not load customer history.": "ग्राहक विवरण लोड गर्न सकिएन।",
+  "This removes bills, payments, credit balances, and completed/open order state. Menu, customers, staff, and expenses are preserved.": "यसले बिल, भुक्तानी, उधारो र अर्डर विवरण हटाउँछ। मेनु, ग्राहक, कर्मचारी र खर्च सुरक्षित रहन्छन्।"
 };
 
 interface LanguageContextValue {
