@@ -18,6 +18,12 @@ const translations: Record<string, string> = {
   "Type CLEAR SALES": "CLEAR SALES टाइप गर्नुहोस्",
   "Manage food, prices, routing, and availability.": "खाना, मूल्य, अर्डर जाने ठाउँ र उपलब्धता व्यवस्थापन गर्नुहोस्।",
   "Staff accounts": "कर्मचारी खाता", "Food menu": "खानाको मेनु", "Expenses": "खर्च",
+  "Categories": "खानाका वर्गहरू", "Manage categories, staff, customers, and expenses.": "वर्ग, कर्मचारी, ग्राहक र खर्च व्यवस्थापन गर्नुहोस्।",
+  "Keep your categories ready. Dishes can be added later when needed.": "खानाका वर्गहरू तयार राख्नुहोस्। आवश्यक परे पछि परिकार थप्न सकिन्छ।",
+  "Remove all dishes": "सबै परिकार हटाउनुहोस्",
+  "Remove every dish from the POS menu? Categories and past order history will be kept.": "POS मेनुका सबै परिकार हटाउने? वर्ग र पुराना अर्डर विवरण सुरक्षित रहनेछन्।",
+  "All dishes have been removed. Categories are still available.": "सबै परिकार हटाइयो। खानाका वर्गहरू सुरक्षित छन्।",
+  "No categories yet. Add your first category above.": "अहिलेसम्म कुनै वर्ग छैन। माथिबाट पहिलो वर्ग थप्नुहोस्।",
   "Add food item": "खाना थप्नुहोस्", "Edit food item": "खाना सम्पादन गर्नुहोस्", "Add expense": "खर्च थप्नुहोस्",
   "Customer history": "ग्राहकको विवरण", "Search history": "विवरण खोज्नुहोस्", "Name": "नाम",
   "Username": "प्रयोगकर्ता नाम", "Full name": "पूरा नाम", "Role": "भूमिका", "Status": "अवस्था",
@@ -45,7 +51,7 @@ const translations: Record<string, string> = {
   "Expense category": "खर्चको वर्ग", "General": "सामान्य", "Select customer": "ग्राहक छान्नुहोस्",
   "Remove": "हटाउनुहोस्",
   "admin": "प्रशासक", "manager": "व्यवस्थापक", "cashier": "क्यासियर", "waiter": "वेटर",
-  "kitchen": "भान्सा", "bar": "बार", "Username:": "प्रयोगकर्ता नाम:", "Password:": "पासवर्ड:"
+  "kitchen": "भान्सा", "bar": "बार", "Username:": "प्रयोगकर्ता नाम:", "Password:": "पासवर्ड:",
   "Could not load customer history.": "ग्राहक विवरण लोड गर्न सकिएन।",
   "This removes bills, payments, credit balances, and completed/open order state. Menu, customers, staff, and expenses are preserved.": "यसले बिल, भुक्तानी, उधारो र अर्डर विवरण हटाउँछ। मेनु, ग्राहक, कर्मचारी र खर्च सुरक्षित रहन्छन्।"
 };
