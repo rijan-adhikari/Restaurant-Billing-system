@@ -1,7 +1,7 @@
 import random
 import string
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -81,6 +81,24 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
     )
     db.add(bill)
     db.flush()
+
+    # Award loyalty points from discounted food sales (tax and service charge excluded).
+    if payload.customer_id:
+        loyalty = db.execute(text("SELECT enabled,spend_per_point FROM loyalty_settings WHERE id=1")).mappings().first()
+        if loyalty and loyalty["enabled"]:
+            spend_per_point = Decimal(str(loyalty["spend_per_point"]))
+            earned_points = ((subtotal - discount_amount) / spend_per_point).quantize(Decimal("1"), rounding=ROUND_DOWN)
+            if earned_points > 0:
+                db.execute(text("""INSERT INTO loyalty_accounts(customer_id,points_balance,lifetime_points)
+                    VALUES(:customer,:points,:points)
+                    ON CONFLICT(customer_id) DO UPDATE SET
+                    points_balance=loyalty_accounts.points_balance+EXCLUDED.points_balance,
+                    lifetime_points=loyalty_accounts.lifetime_points+EXCLUDED.lifetime_points,
+                    updated_at=NOW()"""), {"customer": payload.customer_id, "points": earned_points})
+                db.execute(text("""INSERT INTO loyalty_transactions(customer_id,bill_id,points,transaction_type,notes,created_by)
+                    VALUES(:customer,:bill,:points,'earn',:notes,:user)"""),
+                    {"customer": payload.customer_id, "bill": bill.id, "points": earned_points,
+                     "notes": "Points earned on bill " + bill.bill_number, "user": user.id})
 
     for method, amount in payment_rows:
         if amount > 0:
