@@ -467,6 +467,19 @@ def create_payroll(payload: PayrollCreate, db: Session = Depends(get_db), user=D
     return dict(row)
 
 
+@router.post("/staff/payroll/{payroll_id}/pay")
+def mark_payroll_paid(payroll_id: str, db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    row = db.execute(text("""UPDATE payroll_entries SET paid_at=NOW()
+        WHERE id=:id AND paid_at IS NULL RETURNING *"""), {"id": payroll_id}).mappings().first()
+    if not row:
+        existing = db.execute(text("SELECT paid_at FROM payroll_entries WHERE id=:id"), {"id": payroll_id}).mappings().first()
+        if not existing:
+            raise HTTPException(404, "Payroll entry not found")
+        raise HTTPException(409, "Payroll entry is already marked as paid")
+    db.commit()
+    return dict(row)
+
+
 @router.post("/reservations")
 def create_reservation(payload: ReservationCreate, db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
     if payload.reserved_for < datetime.utcnow():
