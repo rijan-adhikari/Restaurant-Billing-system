@@ -19,9 +19,11 @@ export default function POS() {
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState("");
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
+  const [taxSettings, setTaxSettings] = useState({ tax_enabled: false, tax_percent: "0", service_charge_enabled: false, service_charge_percent: "0" });
 
-  const cabinTable = tables.find((t) => /cabin/i.test(t.name));
-  const isCabinOrder = tableId && cabinTable ? tableId === cabinTable.id : false;
+  const selectedTable = tables.find((t) => t.id === tableId);
+  const isCabinOrder = Boolean(selectedTable && /cabin/i.test(selectedTable.name));
+  const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
   useEffect(() => {
     api.get("/api/tables").then((res) => setTables(res.data));
@@ -30,6 +32,7 @@ export default function POS() {
       if (res.data.length) setActiveCategory(res.data[0].id);
     });
     api.get("/api/menu-items").then((res) => setItems(res.data));
+    api.get("/api/settings/tax").then((res) => setTaxSettings(res.data)).catch(() => undefined);
   }, []);
 
   const addToCart = (item: MenuItem) => {
@@ -38,7 +41,9 @@ export default function POS() {
       if (existing) {
         return prev.map((l) => (l.menu_item_id === item.id ? { ...l, quantity: l.quantity + 1 } : l));
       }
-      return [...prev, { menu_item_id: item.id, name: item.name, price: Number(item.price), quantity: 1, notes: "" }];
+      const basePrice = Number(item.price);
+      const effectivePrice = isCabinOrder ? roundMoney(basePrice * 1.05) : basePrice;
+      return [...prev, { menu_item_id: item.id, name: item.name, price: effectivePrice, quantity: 1, notes: "" }];
     });
   };
 
@@ -50,7 +55,12 @@ export default function POS() {
     );
   };
 
-  const total = cart.reduce((sum, l) => sum + l.price * l.quantity, 0);
+  const itemSubtotal = roundMoney(cart.reduce((sum, l) => sum + l.price * l.quantity, 0));
+  const cabinFee = isCabinOrder ? 500 : 0;
+  const subtotal = roundMoney(itemSubtotal + cabinFee);
+  const taxAmount = taxSettings.tax_enabled ? roundMoney(subtotal * Number(taxSettings.tax_percent) / 100) : 0;
+  const serviceAmount = taxSettings.service_charge_enabled ? roundMoney(subtotal * Number(taxSettings.service_charge_percent) / 100) : 0;
+  const total = roundMoney(subtotal + taxAmount + serviceAmount);
 
   const sendKOT = async () => {
     if (!tableId || cart.length === 0) return;
@@ -91,11 +101,12 @@ export default function POS() {
   );
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-2">
+    <div className="mx-auto grid max-w-7xl grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_390px]">
+      <div className="min-w-0">
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">Royal Skye · Point of Sale</p><h1 className="mt-1 text-2xl font-bold">Take an order</h1><p className="text-sm text-neutral-500">{selectedTable ? "Table " + selectedTable.name + " · " + selectedTable.capacity + " seats" : "Select a table before opening the POS"}</p></div>{isCabinOrder && <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">Cabin pricing applies</span>}</div>
         <input
           placeholder="Search items..."
-          className="w-full border rounded-lg px-3 py-2 mb-3"
+          className="mb-3 w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 shadow-sm focus:border-brand"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -104,7 +115,7 @@ export default function POS() {
             <button
               key={c.id}
               onClick={() => setActiveCategory(c.id)}
-              className={`px-3 py-1.5 rounded-lg border text-sm ${
+              className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${
                 activeCategory === c.id ? "bg-brand text-white border-brand" : "bg-white"
               }`}
             >
@@ -112,21 +123,22 @@ export default function POS() {
             </button>
           ))}
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
           {visibleItems.map((item) => (
             <button
               key={item.id}
               onClick={() => addToCart(item)}
-              className="bg-white rounded-xl shadow p-3 text-left hover:shadow-md transition"
+              className="rounded-2xl border border-neutral-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-md"
             >
-              <div className="font-medium">{item.name}</div>
-              <div className="text-sm text-neutral-500">Rs. {item.price}</div>
+              <div className="font-semibold">{item.name}</div>
+              <div className="mt-2 text-sm font-semibold text-brand">Rs. {Number(item.price).toFixed(2)}</div>
+              <div className="mt-3 text-xs text-neutral-400">Tap to add to order</div>
             </button>
           ))}
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow p-4 h-fit sticky top-4">
+      <div className="h-fit rounded-2xl border border-neutral-200 bg-white p-5 shadow-lg xl:sticky xl:top-5">
         <div className="mb-3">
           {isCabinOrder && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-800">
@@ -135,7 +147,7 @@ export default function POS() {
           )}
         </div>
 
-        <h2 className="font-semibold mb-3">Current Order</h2>
+        <div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-bold">Current order</h2><span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs text-neutral-600">{cart.reduce((sum, line) => sum + line.quantity, 0)} items</span></div>
         {cart.length === 0 && <p className="text-sm text-neutral-400">No items yet.</p>}
         <div className="space-y-2 mb-4">
           {cart.map((l) => (
@@ -152,9 +164,14 @@ export default function POS() {
             </div>
           ))}
         </div>
-        <div className="flex justify-between font-semibold border-t pt-3 mb-3">
-          <span>Total</span>
-          <span>Rs. {total.toFixed(2)}</span>
+        <div className="mt-4 space-y-2 border-t pt-4 text-sm">
+          <div className="flex justify-between"><span className="text-neutral-500">Items subtotal</span><span>Rs. {itemSubtotal.toFixed(2)}</span></div>
+          {isCabinOrder && <div className="flex justify-between"><span className="text-neutral-500">Cabin fee</span><span>Rs. {cabinFee.toFixed(2)}</span></div>}
+          <div className="flex justify-between"><span className="text-neutral-500">Subtotal</span><span>Rs. {subtotal.toFixed(2)}</span></div>
+          {taxSettings.tax_enabled && <div className="flex justify-between"><span className="text-neutral-500">Tax ({taxSettings.tax_percent}%)</span><span>Rs. {taxAmount.toFixed(2)}</span></div>}
+          {taxSettings.service_charge_enabled && <div className="flex justify-between"><span className="text-neutral-500">Service charge ({taxSettings.service_charge_percent}%)</span><span>Rs. {serviceAmount.toFixed(2)}</span></div>}
+          <div className="flex justify-between border-t pt-3 text-base font-bold"><span>Estimated total</span><span className="text-brand">Rs. {total.toFixed(2)}</span></div>
+          <p className="text-[11px] text-neutral-400">Final amount is confirmed at billing. Discounts and any customer credit are handled at checkout.</p>
         </div>
         <button
           disabled={sending || cart.length === 0}
