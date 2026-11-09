@@ -165,6 +165,7 @@ class BillCreate(BaseModel):
     customer_id: Optional[str] = None
     discount_percent: Decimal = Decimal("0")
     discount_amount: Decimal = Decimal("0")
+    loyalty_points_redeemed: Decimal = Decimal("0")
     payments: List[PaymentCreate] = []
 
 
