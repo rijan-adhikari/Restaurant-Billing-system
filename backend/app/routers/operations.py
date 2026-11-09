@@ -81,6 +81,8 @@ def init_operations_schema() -> None:
         """ALTER TABLE expenses ADD COLUMN IF NOT EXISTS supplier_id UUID REFERENCES suppliers(id)""",
         """ALTER TABLE expenses ADD COLUMN IF NOT EXISTS receipt_reference VARCHAR(255)""",
         """ALTER TABLE expenses ADD COLUMN IF NOT EXISTS notes TEXT""",
+        "ALTER TABLE stock_movements DROP CONSTRAINT IF EXISTS stock_movements_movement_type_check",
+        "ALTER TABLE stock_movements ADD CONSTRAINT stock_movements_movement_type_check CHECK (movement_type IN ('opening','purchase','consumption','waste','adjustment','return','supplier_return'))",
         "CREATE INDEX IF NOT EXISTS ix_stock_movements_item_date ON stock_movements(item_id,created_at DESC)",
         "CREATE INDEX IF NOT EXISTS ix_purchase_orders_date ON purchase_orders(ordered_at DESC)",
         "CREATE INDEX IF NOT EXISTS ix_reservations_date ON reservations(reserved_for)"
@@ -146,6 +148,15 @@ class PurchaseLine(BaseModel):
 class PurchaseCreate(BaseModel):
     supplier_id: str
     items: list[PurchaseLine] = Field(min_length=1)
+    notes: str | None = None
+
+
+class SupplierReturnCreate(BaseModel):
+    supplier_id: str
+    item_id: str
+    quantity: Decimal = Field(gt=0)
+    unit_cost: Decimal = Field(ge=0)
+    reference: str | None = None
     notes: str | None = None
 
 
@@ -316,6 +327,38 @@ def create_purchase(payload: PurchaseCreate, db: Session = Depends(get_db), user
          "notes": "Stock purchase received", "user": user.id})
     db.commit()
     return {"id": po["id"], "order_number": number, "status": "received", "subtotal": str(total)}
+
+
+@router.post("/supplier-returns")
+def create_supplier_return(payload: SupplierReturnCreate, db: Session = Depends(get_db),
+                           user=Depends(require_roles(*MANAGERS))):
+    supplier = db.execute(text("SELECT id FROM suppliers WHERE id=:id AND is_active=TRUE"),
+                           {"id": payload.supplier_id}).first()
+    if not supplier:
+        raise HTTPException(404, "Supplier not found")
+    item = db.execute(text("SELECT * FROM inventory_items WHERE id=:id AND is_active=TRUE FOR UPDATE"),
+                      {"id": payload.item_id}).mappings().first()
+    if not item:
+        raise HTTPException(404, "Inventory item not found")
+    current = Decimal(str(item["quantity"]))
+    if payload.quantity > current:
+        raise HTTPException(409, f"Cannot return {payload.quantity}; only {current} {item['unit']} is in stock")
+    new_quantity = current - payload.quantity
+    amount = payload.quantity * payload.unit_cost
+    db.execute(text("UPDATE inventory_items SET quantity=:quantity,updated_at=NOW() WHERE id=:id"),
+               {"quantity": new_quantity, "id": payload.item_id})
+    reference = payload.reference or "SUP-RET-" + datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
+    db.execute(text("""INSERT INTO stock_movements(item_id,movement_type,quantity,unit_cost,reference,notes,created_by)
+        VALUES(:item,'supplier_return',:quantity,:cost,:reference,:notes,:user)"""),
+        {"item": payload.item_id, "quantity": payload.quantity, "cost": payload.unit_cost,
+         "reference": reference, "notes": payload.notes or "Returned stock to supplier", "user": user.id})
+    db.execute(text("""INSERT INTO supplier_ledger(supplier_id,entry_type,amount,reference,notes,created_by)
+        VALUES(:supplier,'return',:amount,:reference,:notes,:user)"""),
+        {"supplier": payload.supplier_id, "amount": amount, "reference": reference,
+         "notes": payload.notes or f"Returned {payload.quantity} {item['unit']} of {item['name']}", "user": user.id})
+    db.commit()
+    return {"reference": reference, "item_id": payload.item_id, "previous_quantity": str(current),
+            "quantity": str(new_quantity), "return_amount": str(amount)}
 
 
 @router.get("/purchases")
