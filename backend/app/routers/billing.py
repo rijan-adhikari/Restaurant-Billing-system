@@ -116,7 +116,8 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
             original_amount=grand_total - total_paid, remaining_amount=grand_total - total_paid,
         ))
 
-    order.status = models.OrderStatus.completed
+    db.add(models.AuditLog(user_id=user.id, action="bill.create", details=f"Generated bill {bill.bill_number} for NPR {grand_total}"))
+        order.status = models.OrderStatus.completed
     if order.table:
         order.table.status = models.TableStatus.available
 
@@ -136,6 +137,11 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
             available = Decimal(str(ingredient["stock_quantity"]))
             if available < used:
                 raise HTTPException(status_code=409, detail="Insufficient stock for " + ingredient["name"] + ": need " + str(used) + " " + ingredient["unit"] + ", have " + str(available))
+            db.execute(text("""INSERT INTO bill_cost_snapshots(bill_id,order_item_id,inventory_item_id,quantity,unit_cost,total_cost)
+                VALUES(:bill,:order_item,:inventory,:quantity,:unit_cost,:total_cost)"""),
+                {"bill": bill.id, "order_item": order_item.id, "inventory": ingredient["item_id"],
+                 "quantity": used, "unit_cost": ingredient["average_cost"],
+                 "total_cost": used * Decimal(str(ingredient["average_cost"]))})
             db.execute(text("UPDATE inventory_items SET quantity=quantity-:used,updated_at=NOW() WHERE id=:id"),
                        {"used": used, "id": ingredient["item_id"]})
             db.execute(text("""INSERT INTO stock_movements(item_id,movement_type,quantity,unit_cost,reference,notes,created_by)
