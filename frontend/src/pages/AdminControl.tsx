@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { api } from "../api/client";
+import { api, apiErrorMessage } from "../api/client";
 
 type Tab = "cash" | "refunds" | "suppliers" | "loyalty" | "reports" | "service" | "backup" | "audit" | "settings";
 const tabs: { id: Tab; label: string }[] = [
@@ -60,7 +60,7 @@ export default function AdminControl() {
   const run = async (action: () => Promise<any>, success: string) => {
     setBusy(true); setError(""); setMessage("");
     try { await action(); setMessage(success); await load(); }
-    catch (e: any) { setError(e?.response?.data?.detail || "The operation failed. Check the values and try again."); }
+    catch (e: any) { setError(apiErrorMessage(e, "Control centre operation failed")); }
     finally { setBusy(false); }
   };
 
@@ -157,11 +157,38 @@ export default function AdminControl() {
   };
 
   const saveSettings = async () => {
-    await run(async () => {
-      await api.put("/api/settings/restaurant", restaurant);
-      await api.put("/api/settings/tax", { ...tax, tax_percent: Number(tax.tax_percent), service_charge_percent: Number(tax.service_charge_percent) });
-      await api.put("/api/admin/loyalty/settings", { ...loyalty, spend_per_point: Number(loyalty.spend_per_point), point_value: Number(loyalty.point_value) });
-    }, "Business settings saved.");
+    if (!restaurant.name?.trim()) {
+      setError("Restaurant name is required.");
+      return;
+    }
+    const taxPercent = Number(tax.tax_percent);
+    const servicePercent = Number(tax.service_charge_percent);
+    const spendPerPoint = Number(loyalty.spend_per_point);
+    const pointValue = Number(loyalty.point_value);
+    if (![taxPercent, servicePercent, spendPerPoint, pointValue].every(Number.isFinite)
+        || taxPercent < 0 || taxPercent > 100 || servicePercent < 0 || servicePercent > 100
+        || spendPerPoint <= 0 || pointValue < 0) {
+      setError("Check tax and service charge (0–100%), spend per point (>0), and point value (0 or more).");
+      return;
+    }
+    setBusy(true); setError(""); setMessage("");
+    const steps: [string, () => Promise<any>][] = [
+      ["Restaurant profile", () => api.put("/api/settings/restaurant", restaurant)],
+      ["Tax and service charge", () => api.put("/api/settings/tax", { ...tax, tax_percent: taxPercent, service_charge_percent: servicePercent })],
+      ["Loyalty rules", () => api.put("/api/admin/loyalty/settings", { ...loyalty, spend_per_point: spendPerPoint, point_value: pointValue })],
+    ];
+    try {
+      for (const [label, save] of steps) {
+        try { await save(); }
+        catch (error: any) {
+          throw new Error(`${label} could not be saved: ${apiErrorMessage(error, "Server rejected the update")}`);
+        }
+      }
+      setMessage("All business settings saved successfully.");
+      await load();
+    } catch (error: any) {
+      setError(error?.message || "Business settings could not be saved.");
+    } finally { setBusy(false); }
   };
 
   return <div className="mx-auto max-w-7xl space-y-5">
