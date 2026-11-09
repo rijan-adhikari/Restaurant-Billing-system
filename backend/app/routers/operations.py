@@ -13,7 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app import models
-
+from app.database import get_db
 from app.deps import require_roles
 
 router = APIRouter(prefix="/api/operations", tags=["restaurant operations"])
@@ -25,7 +25,7 @@ UNITS = {"kg": ("weight", Decimal("1000")), "g": ("weight", Decimal("1")),
          "box": ("pack", Decimal("1"))}
 
 
-f decimal_value(value: Any, label: str = "value") -> Decimal:
+def decimal_value(value: Any, label: str = "value") -> Decimal:
     try:
         result = Decimal(str(value))
     except (InvalidOperation, TypeError):
