@@ -35,7 +35,7 @@ app.include_router(admin_control.router)
 
 @app.on_event("startup")
 def on_startup():
-    # Phase 1: create tables directly. Move to Alembic migrations before production use.
+    # Create core ORM tables, then apply versioned operational/admin migrations.
     Base.metadata.create_all(bind=engine)
     backend_dir = Path(__file__).resolve().parents[1]
     migration_config = Config(str(backend_dir / "alembic.ini"))
