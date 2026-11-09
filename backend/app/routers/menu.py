@@ -83,3 +83,26 @@ def delete_menu_item(item_id: str, db: Session = Depends(get_db),
     db.add(models.AuditLog(user_id=user.id, action=action, details=f"Removed menu item {item.name}"))
     db.commit()
     return result
+
+
+@router.delete("/menu-items")
+def delete_all_menu_items(db: Session = Depends(get_db),
+                          user=Depends(require_roles(models.RoleName.admin))):
+    items = db.query(models.MenuItem).all()
+    removed = 0
+    archived = 0
+    for item in items:
+        has_history = db.query(models.OrderItem.id).filter(models.OrderItem.menu_item_id == item.id).first() is not None
+        if has_history:
+            item.is_available = False
+            archived += 1
+        else:
+            db.delete(item)
+            removed += 1
+    db.add(models.AuditLog(
+        user_id=user.id,
+        action="menu.bulk_cleared",
+        details=f"Removed {removed} menu items and archived {archived} items with order history",
+    ))
+    db.commit()
+    return {"ok": True, "removed": removed, "archived": archived}
