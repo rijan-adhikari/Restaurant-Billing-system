@@ -1,3 +1,7 @@
+from pathlib import Path
+
+from alembic import command
+from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -34,7 +38,11 @@ def on_startup():
     # Phase 1: create tables directly. Move to Alembic migrations before production use.
     Base.metadata.create_all(bind=engine)
     operations.init_operations_schema()
-    admin_control.init_admin_schema()
+    backend_dir = Path(__file__).resolve().parents[1]
+    migration_config = Config(str(backend_dir / "alembic.ini"))
+    migration_config.set_main_option("script_location", str(backend_dir / "alembic"))
+    migration_config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
+    command.upgrade(migration_config, "head")
 
 
 @app.get("/api/health")
