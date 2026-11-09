@@ -446,10 +446,21 @@ def profit_loss(start: date = Query(default_factory=lambda: date.today().replace
         FROM expenses WHERE expense_date::date BETWEEN :start AND :end"""), {"start": start, "end": end}).mappings().one()
     payroll = db.execute(text("""SELECT COALESCE(SUM(gross_pay),0) FROM payroll_entries
         WHERE period_end BETWEEN :start AND :end"""), {"start": start, "end": end}).scalar_one()
-    cogs = db.execute(text("""SELECT COALESCE(SUM(s.total_cost),0) total
+    snapshot_cogs = db.execute(text("""SELECT COALESCE(SUM(s.total_cost),0)
         FROM bill_cost_snapshots s JOIN bills b ON b.id=s.bill_id
         WHERE b.created_at::date BETWEEN :start AND :end"""),
         {"start": start, "end": end}).scalar_one()
+    # Older bills created before snapshots existed retain a clearly labelled current-cost estimate.
+    legacy_cogs = db.execute(text("""SELECT COALESCE(SUM(ri.quantity * oi.quantity * i.average_cost / r.yield_quantity),0)
+        FROM bills b JOIN orders o ON o.id=b.order_id
+        JOIN order_items oi ON oi.order_id=o.id AND oi.is_cancelled=FALSE
+        JOIN recipes r ON r.menu_item_id=oi.menu_item_id
+        JOIN recipe_items ri ON ri.recipe_id=r.id
+        JOIN inventory_items i ON i.id=ri.item_id
+        WHERE b.created_at::date BETWEEN :start AND :end
+          AND NOT EXISTS (SELECT 1 FROM bill_cost_snapshots s WHERE s.bill_id=b.id)"""),
+        {"start": start, "end": end}).scalar_one()
+    cogs = Decimal(str(snapshot_cogs)) + Decimal(str(legacy_cogs))
     refunds = db.execute(text("""SELECT COALESCE(SUM(r.amount),0) FROM bill_refunds r
         JOIN bills b ON b.id=r.bill_id WHERE b.created_at::date BETWEEN :start AND :end"""),
         {"start": start, "end": end}).scalar_one()
@@ -469,7 +480,7 @@ def profit_loss(start: date = Query(default_factory=lambda: date.today().replace
         "total_operating_expenses": str(total_operating_expenses),
         "operating_profit_estimate": str(operating_profit),
         "expense_breakdown": expenses["breakdown"],
-        "note": "COGS is based on ingredient cost snapshots captured when each bill was finalized. This is an operational report, not an audited financial statement."}
+        "note": "New bills use ingredient cost snapshots captured at finalization. Older bills without snapshots use current average costs as estimates; this is not an audited financial statement."}
 
 
 @router.get("/reports/stock")
