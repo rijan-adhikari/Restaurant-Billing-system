@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime, date
+from io import BytesIO
 from decimal import Decimal
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -66,6 +68,140 @@ class LoyaltyAdjustment(BaseModel):
     customer_id: str
     points: Decimal
     notes: str = Field(min_length=3, max_length=500)
+
+
+def _report_data(start: date, end: date, db: Session):
+    if end < start:
+        raise HTTPException(422, "End date must not precede start date")
+    summary = db.execute(text("""SELECT COUNT(*) bill_count,
+        COALESCE(SUM(b.subtotal),0) gross_sales, COALESCE(SUM(b.discount_amount),0) discounts,
+        COALESCE(SUM(b.tax_amount),0) tax, COALESCE(SUM(b.service_charge_amount),0) service_charge,
+        COALESCE(SUM(b.grand_total),0) billed_total, COALESCE(SUM(b.amount_paid),0) received
+        FROM bills b WHERE b.created_at::date BETWEEN :start AND :end"""),
+        {"start": start, "end": end}).mappings().one()
+    refunds = db.execute(text("""SELECT COALESCE(SUM(r.amount),0) FROM bill_refunds r
+        JOIN bills b ON b.id=r.bill_id WHERE b.created_at::date BETWEEN :start AND :end"""),
+        {"start": start, "end": end}).scalar_one()
+    payments = db.execute(text("""SELECT p.method,COALESCE(SUM(p.amount),0) amount,COUNT(*) transactions
+        FROM payments p JOIN bills b ON b.id=p.bill_id
+        WHERE b.created_at::date BETWEEN :start AND :end GROUP BY p.method ORDER BY p.method"""),
+        {"start": start, "end": end}).mappings().all()
+    items = db.execute(text("""SELECT m.name,SUM(oi.quantity) quantity,
+        SUM(oi.quantity*oi.unit_price) gross_amount
+        FROM bills b JOIN orders o ON o.id=b.order_id
+        JOIN order_items oi ON oi.order_id=o.id AND oi.is_cancelled=FALSE
+        JOIN menu_items m ON m.id=oi.menu_item_id
+        WHERE b.created_at::date BETWEEN :start AND :end
+        GROUP BY m.name ORDER BY quantity DESC"""), {"start": start, "end": end}).mappings().all()
+    staff = db.execute(text("""SELECT u.full_name,COUNT(b.id) bills,
+        COALESCE(SUM(b.grand_total),0) billed_total,COALESCE(SUM(b.amount_paid),0) received
+        FROM bills b JOIN orders o ON o.id=b.order_id JOIN users u ON u.id=o.waiter_id
+        WHERE b.created_at::date BETWEEN :start AND :end
+        GROUP BY u.id,u.full_name ORDER BY billed_total DESC"""),
+        {"start": start, "end": end}).mappings().all()
+    return summary, Decimal(str(refunds)), payments, items, staff
+
+
+@router.get("/reports/sales.csv")
+def export_sales_csv(start: date, end: date, db: Session = Depends(get_db),
+                     user=Depends(require_roles(*MANAGERS))):
+    summary, refunds, payments, items, staff = _report_data(start, end, db)
+    import csv
+    import io
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Royal Skye sales report", start.isoformat(), end.isoformat()])
+    writer.writerow(["Bills", summary["bill_count"]])
+    writer.writerow(["Gross sales", summary["gross_sales"]])
+    writer.writerow(["Discounts", summary["discounts"]])
+    writer.writerow(["Refunds", refunds])
+    writer.writerow(["Net sales", Decimal(str(summary["gross_sales"])) - Decimal(str(summary["discounts"])) - refunds])
+    writer.writerow([])
+    writer.writerow(["Payment method", "Amount", "Transactions"])
+    for row in payments:
+        writer.writerow([row["method"], row["amount"], row["transactions"]])
+    writer.writerow([])
+    writer.writerow(["Item", "Quantity", "Gross amount"])
+    for row in items:
+        writer.writerow([row["name"], row["quantity"], row["gross_amount"]])
+    writer.writerow([])
+    writer.writerow(["Staff", "Bills", "Billed total", "Received"])
+    for row in staff:
+        writer.writerow([row["full_name"], row["bills"], row["billed_total"], row["received"]])
+    return StreamingResponse(iter([output.getvalue()]), media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=royal-skye-sales-{start}-{end}.csv"})
+
+
+@router.get("/reports/sales.xlsx")
+def export_sales_xlsx(start: date, end: date, db: Session = Depends(get_db),
+                      user=Depends(require_roles(*MANAGERS))):
+    from openpyxl import Workbook
+    summary, refunds, payments, items, staff = _report_data(start, end, db)
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Summary"
+    sheet.append(["Royal Skye sales report", f"{start} to {end}"])
+    sheet.append(["Bills", summary["bill_count"]])
+    sheet.append(["Gross sales", float(summary["gross_sales"])])
+    sheet.append(["Discounts", float(summary["discounts"])])
+    sheet.append(["Refunds", float(refunds)])
+    sheet.append(["Net sales", float(Decimal(str(summary["gross_sales"])) - Decimal(str(summary["discounts"])) - refunds)])
+    sheet.append(["Tax collected", float(summary["tax"])])
+    sheet.append(["Service charge", float(summary["service_charge"])])
+    for title, headers, rows in [
+        ("Payments", ["Method", "Amount", "Transactions"], [[r["method"], float(r["amount"]), r["transactions"]] for r in payments]),
+        ("Items", ["Item", "Quantity", "Gross amount"], [[r["name"], float(r["quantity"]), float(r["gross_amount"])] for r in items]),
+        ("Staff", ["Staff", "Bills", "Billed total", "Received"], [[r["full_name"], r["bills"], float(r["billed_total"]), float(r["received"])] for r in staff]),
+    ]:
+        ws = workbook.create_sheet(title)
+        ws.append(headers)
+        for row in rows:
+            ws.append(row)
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+    return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=royal-skye-sales-{start}-{end}.xlsx"})
+
+
+@router.get("/reports/sales.pdf")
+def export_sales_pdf(start: date, end: date, db: Session = Depends(get_db),
+                     user=Depends(require_roles(*MANAGERS))):
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    summary, refunds, payments, items, staff = _report_data(start, end, db)
+    output = BytesIO()
+    document = SimpleDocTemplate(output, pagesize=A4, title="Royal Skye Sales Report")
+    styles = getSampleStyleSheet()
+    story = [Paragraph("Royal Skye · Sales Report", styles["Title"]),
+             Paragraph(f"Period: {start} to {end}", styles["Normal"]), Spacer(1, 14)]
+    net_sales = Decimal(str(summary["gross_sales"])) - Decimal(str(summary["discounts"])) - refunds
+    summary_rows = [["Metric", "Amount / Count"], ["Bills", str(summary["bill_count"])],
+        ["Gross sales", f"NPR {summary['gross_sales']}"], ["Discounts", f"NPR {summary['discounts']}"],
+        ["Refunds", f"NPR {refunds}"], ["Net sales", f"NPR {net_sales}"],
+        ["Tax collected", f"NPR {summary['tax']}"], ["Service charge", f"NPR {summary['service_charge']}"]]
+    for title, rows in [
+        ("Summary", summary_rows),
+        ("Payment methods", [["Method", "Amount", "Transactions"]] + [[r["method"], str(r["amount"]), str(r["transactions"])] for r in payments]),
+        ("Top selling items", [["Item", "Quantity", "Gross"]] + [[r["name"], str(r["quantity"]), str(r["gross_amount"])] for r in items[:20]]),
+        ("Staff performance", [["Staff", "Bills", "Billed", "Received"]] + [[r["full_name"], str(r["bills"]), str(r["billed_total"]), str(r["received"])] for r in staff]),
+    ]:
+        story.append(Paragraph(title, styles["Heading2"]))
+        table = Table(rows, repeatRows=1, hAlign="LEFT")
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#5e1010")),
+            ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+            ("GRID", (0,0), (-1,-1), 0.35, colors.HexColor("#dddddd")),
+            ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, colors.HexColor("#f7f7f7")]),
+            ("FONTSIZE", (0,0), (-1,-1), 8), ("PADDING", (0,0), (-1,-1), 5),
+        ]))
+        story.extend([table, Spacer(1, 12)])
+    document.build(story)
+    output.seek(0)
+    return StreamingResponse(output, media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=royal-skye-sales-{start}-{end}.pdf"})
 
 
 @router.get("/audit")
