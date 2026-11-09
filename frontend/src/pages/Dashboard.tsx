@@ -79,7 +79,7 @@ export default function Dashboard() {
       </div>
       {message && <p className="text-sm text-green-700">{message}</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
-      {role === "admin" && <section className="bg-white rounded-xl shadow p-5 border border-red-100"><h2 className="font-semibold text-red-800">{t("Clear sales data")}</h2><p className="text-sm text-neutral-600 mt-1 mb-3">This removes bills, payments, credit balances, and completed/open order state. Menu, customers, staff, and expenses are preserved.</p><div className="flex flex-wrap gap-2"><input className="border rounded-lg px-3 py-2" placeholder={t("Type CLEAR SALES")} value={clearText} onChange={(e) => setClearText(e.target.value)} /><button type="button" onClick={clearSales} className="bg-red-700 text-white rounded-lg px-4 py-2 font-medium">{t("Clear all sales")}</button></div></section>}
+      {role === "admin" && <section className="bg-white rounded-xl shadow p-5 border border-red-100"><h2 className="font-semibold text-red-800">{t("Clear sales data")}</h2><p className="text-sm text-neutral-600 mt-1 mb-3">{t("This removes bills, payments, credit balances, and completed/open order state. Menu, customers, staff, and expenses are preserved.")}</p><div className="flex flex-wrap gap-2"><input className="border rounded-lg px-3 py-2" placeholder={t("Type CLEAR SALES")} value={clearText} onChange={(e) => setClearText(e.target.value)} /><button type="button" onClick={clearSales} className="bg-red-700 text-white rounded-lg px-4 py-2 font-medium">{t("Clear all sales")}</button></div></section>}
     </div>
   );
 }
