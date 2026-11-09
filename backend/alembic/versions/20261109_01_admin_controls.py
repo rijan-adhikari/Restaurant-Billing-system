@@ -1,12 +1,12 @@
 """Add administration controls, cash sessions, refunds, supplier ledger and loyalty.
 
 Revision ID: 20261109_01
-Revises:
+Revises: 20261109_00
 """
 from alembic import op
 
 revision = "20261109_01"
-down_revision = None
+down_revision = "20261109_00"
 branch_labels = None
 depends_on = None
 
