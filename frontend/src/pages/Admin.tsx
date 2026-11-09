@@ -5,7 +5,6 @@ import { useLanguage } from "../context/LanguageContext";
 interface Category { id: string; name: string; }
 interface Staff { id: string; username: string; full_name: string; role: string; is_active: boolean; }
 interface Customer { id: string; name: string; phone?: string | null; }
-interface Expense { id: string; category: string; description: string; amount: string; expense_date: string; }
 interface CustomerHistory {
   customer_id: string;
   name: string;
@@ -30,8 +29,6 @@ export default function Admin() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [expenseForm, setExpenseForm] = useState({ category: "General", description: "", amount: "", expense_date: new Date().toISOString().slice(0, 10) });
   const [history, setHistory] = useState<CustomerHistory[]>([]);
   const [historyCustomerId, setHistoryCustomerId] = useState("");
   const [historyFrom, setHistoryFrom] = useState("");
@@ -46,16 +43,14 @@ export default function Admin() {
   const [error, setError] = useState("");
 
   const load = async () => {
-    const [categoryResponse, staffResponse, customerResponse, expenseResponse] = await Promise.all([
+    const [categoryResponse, staffResponse, customerResponse] = await Promise.all([
       api.get("/api/categories"),
       api.get("/api/users"),
       api.get("/api/customers"),
-      api.get("/api/expenses"),
     ]);
     setCategories(categoryResponse.data);
     setStaff(staffResponse.data);
     setCustomers(customerResponse.data);
-    setExpenses(expenseResponse.data);
   };
 
   const searchHistory = async () => {
@@ -92,26 +87,6 @@ export default function Admin() {
       setError(e?.response?.data?.detail || "Could not create staff account.");
     }
   };
-
-  const addExpense = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setError("");
-    try {
-      await api.post("/api/expenses", { ...expenseForm, amount: Number(expenseForm.amount), expense_date: `${expenseForm.expense_date}T00:00:00` });
-      setExpenseForm({ category: "General", description: "", amount: "", expense_date: new Date().toISOString().slice(0, 10) });
-      setMessage("Expense added.");
-      await load();
-    } catch (e: any) {
-      setError(e?.response?.data?.detail || "Could not add expense.");
-    }
-  };
-
-  const deleteExpense = async (id: string) => {
-    if (!window.confirm("Delete this expense? This action is recorded in the audit log.")) return;
-    try { await api.delete(`/api/expenses/${id}`); setMessage("Expense deleted."); await load(); }
-    catch (e: any) { setError(e?.response?.data?.detail || "Could not delete expense."); }
-  };
-
 
   const removeAllDishes = async () => {
     if (!window.confirm(t("Remove every dish from the POS menu? Categories and past order history will be kept."))) return;
@@ -205,7 +180,7 @@ export default function Admin() {
     <div className="max-w-6xl flex flex-col space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">{t("Master Panel")}</h1>
-        <p className="text-sm text-neutral-500 mt-1">{t("Manage categories, staff, customers, and expenses.")}</p>
+        <p className="text-sm text-neutral-500 mt-1">{t("Manage categories, staff, and customers.")}</p>
       </div>
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
       </div>
@@ -247,20 +222,6 @@ export default function Admin() {
         <div className="mt-4 flex flex-wrap gap-2">
           {categories.map((category) => <span key={category.id} className="inline-flex items-center gap-2 rounded-lg bg-neutral-100 px-3 py-2 text-sm">{category.name}<button type="button" aria-label={`Delete ${category.name}`} onClick={() => deleteCategory(category)} className="font-medium text-red-700">{t("Delete")}</button></span>)}
           {categories.length === 0 && <p className="text-sm text-neutral-500">{t("No categories yet. Add your first category above.")}</p>}
-        </div>
-      </section>
-
-      <section className="bg-white rounded-xl shadow p-5">
-        <h2 className="font-semibold mb-4">{t("Expenses")}</h2>
-        <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
-          <form onSubmit={addExpense} className="space-y-3">
-            <input required placeholder={t("Category")} className="w-full border rounded-lg px-3 py-2" value={expenseForm.category} onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })} />
-            <input required placeholder={t("Description")} className="w-full border rounded-lg px-3 py-2" value={expenseForm.description} onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })} />
-            <input required min="0" step="0.01" type="number" placeholder={t("Amount")} className="w-full border rounded-lg px-3 py-2" value={expenseForm.amount} onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })} />
-            <input required type="date" className="w-full border rounded-lg px-3 py-2" value={expenseForm.expense_date} onChange={(e) => setExpenseForm({ ...expenseForm, expense_date: e.target.value })} />
-            <button type="submit" className="bg-brand text-white rounded-lg px-4 py-2 font-medium">{t("Add expense")}</button>
-          </form>
-          <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left border-b"><th className="py-2">{t("Date")}</th><th>{t("Category")}</th><th>{t("Description")}</th><th>{t("Amount")}</th><th /></tr></thead><tbody>{expenses.map((expense) => <tr key={expense.id} className="border-b last:border-0"><td className="py-2">{formatDateTime(expense.expense_date)}</td><td>{expense.category}</td><td>{expense.description}</td><td>Rs. {expense.amount}</td><td><button type="button" onClick={() => deleteExpense(expense.id)} className="text-red-700">{t("Delete")}</button></td></tr>)}</tbody></table>{expenses.length === 0 && <p className="text-sm text-neutral-500 mt-3">{t("No expenses recorded.")}</p>}</div>
         </div>
       </section>
 
