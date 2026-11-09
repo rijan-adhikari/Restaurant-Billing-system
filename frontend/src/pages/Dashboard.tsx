@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api/client";
+import { useLanguage } from "../context/LanguageContext";
 
 interface Summary {
   daily_sales: string;
@@ -30,6 +31,7 @@ const emptySummary: Summary = {
 
 export default function Dashboard() {
   const { fullName, role } = useAuth();
+  const { t } = useLanguage();
   const [reportDate, setReportDate] = useState(new Date().toISOString().slice(0, 10));
   const [summary, setSummary] = useState<Summary>(emptySummary);
   const [clearText, setClearText] = useState("");
@@ -59,25 +61,25 @@ export default function Dashboard() {
   };
 
   const cards = [
-    ["Daily sales", summary.daily_sales], ["Monthly sales", summary.monthly_sales], ["Yearly sales", summary.yearly_sales],
-    ["Daily expenses", summary.daily_expenses], ["Monthly expenses", summary.monthly_expenses], ["Yearly expenses", summary.yearly_expenses],
-    ["Estimated daily profit / loss", summary.daily_profit], ["Estimated monthly profit / loss", summary.monthly_profit], ["Estimated yearly profit / loss", summary.yearly_profit],
-    ["Daily estimated COGS", summary.daily_estimated_cogs], ["Monthly estimated COGS", summary.monthly_estimated_cogs], ["Yearly estimated COGS", summary.yearly_estimated_cogs],
-    ["Outstanding credit", summary.outstanding], ["Pending KOTs", String(summary.pending_kots)], ["Occupied tables", String(summary.occupied_tables)],
+    [t("Daily sales"), summary.daily_sales], [t("Monthly sales"), summary.monthly_sales], [t("Yearly sales"), summary.yearly_sales],
+    [t("Daily expenses"), summary.daily_expenses], [t("Monthly expenses"), summary.monthly_expenses], [t("Yearly expenses"), summary.yearly_expenses],
+    [t("Estimated daily profit / loss"), summary.daily_profit], [t("Estimated monthly profit / loss"), summary.monthly_profit], [t("Estimated yearly profit / loss"), summary.yearly_profit],
+    [t("Daily estimated COGS"), summary.daily_estimated_cogs], [t("Monthly estimated COGS"), summary.monthly_estimated_cogs], [t("Yearly estimated COGS"), summary.yearly_estimated_cogs],
+    [t("Outstanding credit"), summary.outstanding], [t("Pending KOTs"), String(summary.pending_kots)], [t("Occupied tables"), String(summary.occupied_tables)],
   ];
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-wrap justify-between gap-3 items-end">
-        <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">Royal Skye · Overview</p><h1 className="mt-1 text-2xl font-bold">Good to see you, {fullName}</h1><p className="text-sm text-neutral-500 capitalize">{role} dashboard · Sales and operations snapshot</p></div>
-        <label className="text-sm">Report date<input type="date" className="block border rounded-lg px-3 py-2 mt-1" value={reportDate} onChange={(e) => setReportDate(e.target.value)} /></label>
+        <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">{t("Royal Skye · Overview")}</p><h1 className="mt-1 text-2xl font-bold">{t("Good to see you,")} {fullName}</h1><p className="text-sm text-neutral-500 capitalize">{role} · {t("Sales and operations snapshot")}</p></div>
+        <label className="text-sm">{t("Report date")}<input type="date" className="block border rounded-lg px-3 py-2 mt-1" value={reportDate} onChange={(e) => setReportDate(e.target.value)} /></label>
       </div>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
         {cards.map(([label, value]) => <div key={label} className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm md:p-5"><p className="text-sm text-neutral-500">{label}</p><p className={`text-2xl font-semibold mt-1 ${label.toLowerCase().includes("profit") && Number(value) < 0 ? "text-red-700" : ""}`}>Rs. {value}</p></div>)}
       </div>
       {message && <p className="text-sm text-green-700">{message}</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
-      {role === "admin" && <section className="bg-white rounded-xl shadow p-5 border border-red-100"><h2 className="font-semibold text-red-800">Clear sales data</h2><p className="text-sm text-neutral-600 mt-1 mb-3">This removes bills, payments, credit balances, and completed/open order state. Menu, customers, staff, and expenses are preserved.</p><div className="flex flex-wrap gap-2"><input className="border rounded-lg px-3 py-2" placeholder="Type CLEAR SALES" value={clearText} onChange={(e) => setClearText(e.target.value)} /><button type="button" onClick={clearSales} className="bg-red-700 text-white rounded-lg px-4 py-2 font-medium">Clear all sales</button></div></section>}
+      {role === "admin" && <section className="bg-white rounded-xl shadow p-5 border border-red-100"><h2 className="font-semibold text-red-800">{t("Clear sales data")}</h2><p className="text-sm text-neutral-600 mt-1 mb-3">This removes bills, payments, credit balances, and completed/open order state. Menu, customers, staff, and expenses are preserved.</p><div className="flex flex-wrap gap-2"><input className="border rounded-lg px-3 py-2" placeholder={t("Type CLEAR SALES")} value={clearText} onChange={(e) => setClearText(e.target.value)} /><button type="button" onClick={clearSales} className="bg-red-700 text-white rounded-lg px-4 py-2 font-medium">{t("Clear all sales")}</button></div></section>}
     </div>
   );
 }
