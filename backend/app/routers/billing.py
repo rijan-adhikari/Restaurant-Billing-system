@@ -10,7 +10,7 @@ from sqlalchemy import text
 from app.database import get_db
 from app import models, schemas
 from app.deps import get_current_user, require_roles
-from app.billing_math import calculate_bill
+from app.billing_math import calculate_bill, money
 
 router = APIRouter(prefix="/api", tags=["billing"])
 
@@ -46,12 +46,35 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
         cabin_fee = Decimal("500.00")
         subtotal += cabin_fee
 
+    points_redeemed = payload.loyalty_points_redeemed
+    if not points_redeemed.is_finite() or points_redeemed < 0:
+        raise HTTPException(status_code=422, detail="Loyalty points redemption must be a non-negative finite amount")
+    loyalty_discount = Decimal("0.00")
+    loyalty_account = None
+    effective_discount_percent = payload.discount_percent
+    if points_redeemed > 0:
+        if not payload.customer_id:
+            raise HTTPException(status_code=400, detail="Select a customer to redeem loyalty points")
+        loyalty_rules = db.execute(text("SELECT enabled,point_value FROM loyalty_settings WHERE id=1")).mappings().first()
+        if not loyalty_rules or not loyalty_rules["enabled"]:
+            raise HTTPException(status_code=409, detail="Customer loyalty is currently disabled")
+        loyalty_account = db.execute(text("SELECT * FROM loyalty_accounts WHERE customer_id=:customer FOR UPDATE"),
+                                     {"customer": payload.customer_id}).mappings().first()
+        if not loyalty_account or points_redeemed > Decimal(str(loyalty_account["points_balance"])):
+            raise HTTPException(status_code=409, detail="Customer does not have enough loyalty points")
+        loyalty_discount = money(points_redeemed * Decimal(str(loyalty_rules["point_value"])))
+        percentage_discount = money(subtotal * payload.discount_percent / Decimal("100"))
+        combined_discount = percentage_discount + loyalty_discount
+        if combined_discount > subtotal:
+            raise HTTPException(status_code=422, detail="Combined discount and loyalty redemption cannot exceed the subtotal")
+        effective_discount_percent = combined_discount * Decimal("100") / subtotal if subtotal else Decimal("0")
+
     tax_setting = db.query(models.TaxSetting).first()
     tax_enabled = bool(tax_setting and tax_setting.tax_enabled)
     tax_percent = Decimal(tax_setting.tax_percent) if tax_setting else Decimal("0")
     service_enabled = bool(tax_setting and tax_setting.service_charge_enabled)
     service_percent = Decimal(tax_setting.service_charge_percent) if tax_setting else Decimal("0")
-    totals = calculate_bill(subtotal, payload.discount_percent, tax_enabled, tax_percent,
+    totals = calculate_bill(subtotal, effective_discount_percent, tax_enabled, tax_percent,
                             service_enabled, service_percent)
     subtotal = totals["subtotal"]
     tax_amount = totals["tax_amount"]
@@ -81,6 +104,15 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
     )
     db.add(bill)
     db.flush()
+
+    if loyalty_account and points_redeemed > 0:
+        remaining_points = Decimal(str(loyalty_account["points_balance"])) - points_redeemed
+        db.execute(text("UPDATE loyalty_accounts SET points_balance=:balance,updated_at=NOW() WHERE id=:id"),
+                   {"balance": remaining_points, "id": loyalty_account["id"]})
+        db.execute(text("""INSERT INTO loyalty_transactions(customer_id,bill_id,points,transaction_type,notes,created_by)
+            VALUES(:customer,:bill,:points,'redeem',:notes,:user)"""),
+            {"customer": payload.customer_id, "bill": bill.id, "points": points_redeemed,
+             "notes": "Points redeemed on bill " + bill.bill_number, "user": user.id})
 
     # Award loyalty points from discounted food sales (tax and service charge excluded).
     if payload.customer_id:
@@ -169,7 +201,7 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
     return {
         "id": bill.id, "bill_number": bill.bill_number, "subtotal": str(subtotal),
         "tax_amount": str(tax_amount), "service_charge_amount": str(service_amount),
-        "discount_percent": str(payload.discount_percent), "discount_amount": str(discount_amount),
+        "discount_percent": str(payload.discount_percent), "discount_amount": str(discount_amount),\n        "loyalty_points_redeemed": str(points_redeemed), "loyalty_discount_amount": str(loyalty_discount),
         "grand_total": str(grand_total), "amount_paid": str(total_paid),
         "tendered_amount": str(tendered_total), "change_due": str(change_due),
         "tax_percent": str(tax_percent), "service_charge_percent": str(service_percent),
