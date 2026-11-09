@@ -95,6 +95,30 @@ def create_user(payload: schemas.UserCreate, db: Session = Depends(get_db),
     return new_user
 
 
+@router.patch("/users/{user_id}")
+def update_user_admin(user_id: str, payload: UserAdminUpdate, db: Session = Depends(get_db),
+                      user=Depends(require_roles(models.RoleName.admin))):
+    target = db.query(models.User).filter(models.User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    next_role = payload.role if payload.role is not None else target.role
+    next_active = payload.is_active if payload.is_active is not None else target.is_active
+    if target.id == user.id and (not next_active or next_role != models.RoleName.admin):
+        raise HTTPException(status_code=400, detail="You cannot disable or demote your own admin account")
+    if target.role == models.RoleName.admin and target.is_active and (not next_active or next_role != models.RoleName.admin):
+        active_admins = db.query(models.User).filter(
+            models.User.role == models.RoleName.admin, models.User.is_active.is_(True)
+        ).count()
+        if active_admins <= 1:
+            raise HTTPException(status_code=409, detail="At least one active admin account must remain")
+    target.role = next_role
+    target.is_active = next_active
+    db.add(models.AuditLog(user_id=user.id, action="user.update",
+                           details=f"Updated account {target.username}: role={next_role.value}, active={next_active}"))
+    db.commit()
+    return {"ok": True, "id": target.id, "role": target.role.value, "is_active": target.is_active}
+
+
 @router.patch("/users/{user_id}/password")
 def change_user_password(user_id: str, payload: schemas.PasswordUpdate, db: Session = Depends(get_db),
                          user=Depends(require_roles(models.RoleName.admin))):
