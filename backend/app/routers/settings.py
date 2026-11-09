@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -8,6 +9,11 @@ from app.deps import get_current_user, require_roles
 from app.security import hash_password
 
 router = APIRouter(prefix="/api", tags=["settings-users"])
+
+
+class UserAdminUpdate(BaseModel):
+    role: Optional[models.RoleName] = None
+    is_active: Optional[bool] = None
 
 
 class RestaurantSettingsUpdate(BaseModel):
@@ -72,7 +78,7 @@ def update_restaurant_setting(payload: RestaurantSettingsUpdate, db: Session = D
 
 @router.get("/users", response_model=list[schemas.UserOut])
 def list_users(db: Session = Depends(get_db), user=Depends(require_roles(models.RoleName.admin))):
-    return db.query(models.User).filter(models.User.is_active.is_(True)).all()
+    return db.query(models.User).order_by(models.User.created_at.desc()).all()
 
 
 @router.post("/users", response_model=schemas.UserOut)
