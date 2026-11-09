@@ -12,6 +12,9 @@ interface Summary {
   daily_profit: string;
   monthly_profit: string;
   yearly_profit: string;
+  daily_estimated_cogs: string;
+  monthly_estimated_cogs: string;
+  yearly_estimated_cogs: string;
   outstanding: string;
   pending_kots: number;
   occupied_tables: number;
@@ -21,6 +24,7 @@ const emptySummary: Summary = {
   daily_sales: "0", monthly_sales: "0", yearly_sales: "0",
   daily_expenses: "0", monthly_expenses: "0", yearly_expenses: "0",
   daily_profit: "0", monthly_profit: "0", yearly_profit: "0",
+  daily_estimated_cogs: "0", monthly_estimated_cogs: "0", yearly_estimated_cogs: "0",
   outstanding: "0", pending_kots: 0, occupied_tables: 0,
 };
 
@@ -57,18 +61,19 @@ export default function Dashboard() {
   const cards = [
     ["Daily sales", summary.daily_sales], ["Monthly sales", summary.monthly_sales], ["Yearly sales", summary.yearly_sales],
     ["Daily expenses", summary.daily_expenses], ["Monthly expenses", summary.monthly_expenses], ["Yearly expenses", summary.yearly_expenses],
-    ["Daily profit / loss", summary.daily_profit], ["Monthly profit / loss", summary.monthly_profit], ["Yearly profit / loss", summary.yearly_profit],
+    ["Estimated daily profit / loss", summary.daily_profit], ["Estimated monthly profit / loss", summary.monthly_profit], ["Estimated yearly profit / loss", summary.yearly_profit],
+    ["Daily estimated COGS", summary.daily_estimated_cogs], ["Monthly estimated COGS", summary.monthly_estimated_cogs], ["Yearly estimated COGS", summary.yearly_estimated_cogs],
     ["Outstanding credit", summary.outstanding], ["Pending KOTs", String(summary.pending_kots)], ["Occupied tables", String(summary.occupied_tables)],
   ];
 
   return (
-    <div className="max-w-7xl space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-wrap justify-between gap-3 items-end">
-        <div><h1 className="text-2xl font-semibold mb-1">Welcome, {fullName}</h1><p className="text-neutral-500 capitalize">{role} dashboard</p></div>
+        <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">Royal Skye · Overview</p><h1 className="mt-1 text-2xl font-bold">Good to see you, {fullName}</h1><p className="text-sm text-neutral-500 capitalize">{role} dashboard · Sales and operations snapshot</p></div>
         <label className="text-sm">Report date<input type="date" className="block border rounded-lg px-3 py-2 mt-1" value={reportDate} onChange={(e) => setReportDate(e.target.value)} /></label>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-        {cards.map(([label, value]) => <div key={label} className="bg-white rounded-xl shadow p-5"><p className="text-sm text-neutral-500">{label}</p><p className={`text-2xl font-semibold mt-1 ${label.includes("profit") && Number(value) < 0 ? "text-red-700" : ""}`}>Rs. {value}</p></div>)}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+        {cards.map(([label, value]) => <div key={label} className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm md:p-5"><p className="text-sm text-neutral-500">{label}</p><p className={`text-2xl font-semibold mt-1 ${label.toLowerCase().includes("profit") && Number(value) < 0 ? "text-red-700" : ""}`}>Rs. {value}</p></div>)}
       </div>
       {message && <p className="text-sm text-green-700">{message}</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
