@@ -46,6 +46,9 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
         cabin_fee = Decimal("500.00")
         subtotal += cabin_fee
 
+    if (not payload.discount_percent.is_finite()
+            or payload.discount_percent < 0 or payload.discount_percent > 100):
+        raise HTTPException(status_code=422, detail="Discount percentage must be between 0 and 100")
     points_redeemed = payload.loyalty_points_redeemed
     if not points_redeemed.is_finite() or points_redeemed < 0:
         raise HTTPException(status_code=422, detail="Loyalty points redemption must be a non-negative finite amount")
