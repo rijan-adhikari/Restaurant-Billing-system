@@ -32,6 +32,14 @@ class RestaurantSettingsUpdate(BaseModel):
 @router.get("/settings/tax")
 def get_tax_setting(db: Session = Depends(get_db), user=Depends(get_current_user)):
     t = db.query(models.TaxSetting).first()
+    if not t:
+        t = models.TaxSetting(
+            tax_enabled=True, tax_percent=14.00,
+            service_charge_enabled=False, service_charge_percent=0.00,
+        )
+        db.add(t)
+        db.commit()
+        db.refresh(t)
     return {"tax_enabled": t.tax_enabled, "tax_percent": str(t.tax_percent),
             "service_charge_enabled": t.service_charge_enabled,
             "service_charge_percent": str(t.service_charge_percent)}
@@ -41,6 +49,13 @@ def get_tax_setting(db: Session = Depends(get_db), user=Depends(get_current_user
 def update_tax_setting(payload: schemas.TaxSettingUpdate, db: Session = Depends(get_db),
                         user=Depends(require_roles(models.RoleName.admin))):
     t = db.query(models.TaxSetting).first()
+    if not t:
+        t = models.TaxSetting(
+            tax_enabled=True, tax_percent=14.00,
+            service_charge_enabled=False, service_charge_percent=0.00,
+        )
+        db.add(t)
+        db.flush()
     if (not payload.tax_percent.is_finite() or not payload.service_charge_percent.is_finite()
             or not (0 <= payload.tax_percent <= 100)
             or not (0 <= payload.service_charge_percent <= 100)):
@@ -57,6 +72,11 @@ def update_tax_setting(payload: schemas.TaxSettingUpdate, db: Session = Depends(
 @router.get("/settings/restaurant")
 def get_restaurant_setting(db: Session = Depends(get_db), user=Depends(get_current_user)):
     r = db.query(models.RestaurantSetting).first()
+    if not r:
+        r = models.RestaurantSetting()
+        db.add(r)
+        db.commit()
+        db.refresh(r)
     return {
         "name": r.name, "email": r.email, "phone": r.phone, "address": r.address,
         "pan": r.pan, "vat": r.vat, "currency": r.currency,
