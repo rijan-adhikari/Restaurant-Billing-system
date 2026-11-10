@@ -78,7 +78,22 @@ const translations: Record<string, string> = {
   "Attendance": "हाजिरी", "Clock staff in and out.": "कर्मचारीको हाजिर र बिदा समय दर्ता गर्नुहोस्।", "Select staff": "कर्मचारी छान्नुहोस्", "Clock in": "हाजिर गर्नुहोस्", "Clock out": "बिदा हुनुहोस्",  
   "Payroll register": "तलब विवरण", "Record salaries, deductions and payment status.": "तलब, कट्टी र भुक्तानी अवस्था दर्ता गर्नुहोस्।", "Staff member": "कर्मचारी", "Gross salary (NPR)": "कुल तलब (रु.)", "Period start": "अवधि सुरु", "Period end": "अवधि समाप्त", "Deductions (NPR)": "कट्टी (रु.)", "Create payroll record": "तलब विवरण बनाउनुहोस्",    "Mark paid": "भुक्तानी भएको चिन्ह लगाउनुहोस्", 
   "Book a table": "टेबल बुक गर्नुहोस्", "Create a future reservation.": "आगामी मितिका लागि टेबल बुक गर्नुहोस्।", "Customer name": "ग्राहकको नाम", "Party size": "व्यक्तिको संख्या", "Date and time": "मिति र समय", "Assign table (optional)": "टेबल तोक्नुहोस् (ऐच्छिक)", "No table assigned": "टेबल तोकिएको छैन", "Create reservation": "बुकिङ गर्नुहोस्",  "Reservations": "बुकिङहरू", "Upcoming and recent bookings.": "आगामी र हालैका बुकिङहरू।",   "Booked": "बुक भएको", "Seated": "टेबलमा बसेको", "Completed": "सम्पन्न", "Cancelled": "रद्द",
-  "Could not load operations data.": "सञ्चालनसम्बन्धी विवरण लोड गर्न सकिएन।", "Restaurant operations request failed": "रेस्टुरेन्ट सञ्चालनको अनुरोध असफल भयो।"
+  "Could not load operations data.": "सञ्चालनसम्बन्धी विवरण लोड गर्न सकिएन।", "Restaurant operations request failed": "रेस्टुरेन्ट सञ्चालनको अनुरोध असफल भयो।",
+  "Add and manage dishes, prices, categories and kitchen/bar routing.": "परिकार, मूल्य, वर्ग र भान्सा/बारमा जाने अर्डर व्यवस्थापन गर्नुहोस्।",
+  "Download food menu PDF": "खानाको मेनु PDF डाउनलोड गर्नुहोस्",
+  "Add a category first, then you can add dishes.": "पहिले वर्ग थप्नुहोस्, त्यसपछि परिकार थप्न सक्नुहुन्छ।",
+  "No food items yet. Add your first dish above.": "अहिलेसम्म परिकार छैन। माथिबाट पहिलो परिकार थप्नुहोस्।",
+  "Food item added.": "परिकार थपियो।", "Food item updated.": "परिकार अद्यावधिक भयो।",
+  "Could not save food item.": "परिकार सेभ गर्न सकिएन।", "Could not delete food item.": "परिकार हटाउन सकिएन।",
+  "Could not download food menu.": "खानाको मेनु डाउनलोड गर्न सकिएन।",
+  "Download dashboard PDF": "ड्यासबोर्ड PDF डाउनलोड गर्नुहोस्",
+  "View details": "विवरण हेर्नुहोस्", "Daily sales details": "आजको बिक्री विवरण",
+  "No sales recorded for this date.": "यस मितिमा बिक्री दर्ता भएको छैन।", "Close": "बन्द गर्नुहोस्",
+  "Total": "जम्मा", "Inventory": "मौज्दात", "Open stock register and manage stock levels": "स्टक विवरण हेर्नुहोस् र मौज्दात व्यवस्थापन गर्नुहोस्",
+  "Open expense register and record expenses": "खर्च विवरण हेर्नुहोस् र खर्च दर्ता गर्नुहोस्",
+  "Low stock alert": "कम मौज्दातको सूचना",
+  "These items are at or below their reorder level. This alert appears whenever you open the dashboard until stock is replenished.": "यी सामानको मौज्दात तोकिएको सीमामा वा कम छ। स्टक नथपिएसम्म ड्यासबोर्ड खोल्दा हरेक पटक यो सूचना देखिन्छ।",
+  "Open inventory": "मौज्दात खोल्नुहोस्"
 
 };
 
