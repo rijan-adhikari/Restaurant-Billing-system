@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+from io import BytesIO
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -106,3 +108,44 @@ def delete_all_menu_items(db: Session = Depends(get_db),
     ))
     db.commit()
     return {"ok": True, "removed": removed, "archived": archived}
+
+
+@router.get("/menu-items/export.pdf")
+def export_food_menu_pdf(db: Session = Depends(get_db), user=Depends(get_current_user)):
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+
+    categories = db.query(models.Category).filter(models.Category.is_active.is_(True)).order_by(models.Category.sort_order, models.Category.name).all()
+    output = BytesIO()
+    document = SimpleDocTemplate(output, pagesize=A4, title="Royal Skye Food Menu")
+    styles = getSampleStyleSheet()
+    story = [Paragraph("Royal Skye Birds · Food Menu", styles["Title"]), Spacer(1, 12)]
+    for category in categories:
+        items = db.query(models.MenuItem).filter(
+            models.MenuItem.category_id == category.id,
+            models.MenuItem.is_available.is_(True)
+        ).order_by(models.MenuItem.sort_order, models.MenuItem.name).all()
+        if not items:
+            continue
+        story.append(Paragraph(category.name, styles["Heading2"]))
+        rows = [["Food item", "Description", "Price (NPR)"]] + [
+            [item.name, item.description or "", f"{item.price:.2f}"] for item in items
+        ]
+        table = Table(rows, colWidths=[150, 270, 75], repeatRows=1, hAlign="LEFT")
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#5e1010")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#dddddd")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f7f7f7")]),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("PADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.extend([table, Spacer(1, 14)])
+    if len(story) == 2:
+        story.append(Paragraph("No available food items have been added yet.", styles["Normal"]))
+    document.build(story)
+    output.seek(0)
+    return StreamingResponse(output, media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=royal-skye-food-menu.pdf"})
