@@ -120,6 +120,16 @@ def clear_sales(db: Session = Depends(get_db), user=Depends(require_roles(models
     return {"ok": True, "deleted_bills": deleted_bills}
 
 
+@router.get("/low-stock")
+def dashboard_low_stock(db: Session = Depends(get_db), user=Depends(require_roles(
+    models.RoleName.admin, models.RoleName.manager, models.RoleName.cashier,
+))):
+    rows = db.execute(text("""SELECT id,name,quantity,unit,reorder_level
+        FROM inventory_items WHERE is_active=TRUE AND quantity<=reorder_level
+        ORDER BY name""")).mappings().all()
+    return [dict(row) for row in rows]
+
+
 @router.get("/daily-sales")
 def daily_sales_details(report_date: date | None = None, db: Session = Depends(get_db),
                         user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager, models.RoleName.cashier))):
