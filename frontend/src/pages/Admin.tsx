@@ -31,6 +31,8 @@ export default function Admin() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [menuEditingId, setMenuEditingId] = useState<string | null>(null);
   const [showUnavailableMenuItems, setShowUnavailableMenuItems] = useState(false);
+  const [menuSearch, setMenuSearch] = useState("");
+  const [menuCategoryFilter, setMenuCategoryFilter] = useState("");
   const menuFormRef = useRef<HTMLFormElement>(null);
   const [menuForm, setMenuForm] = useState({ category_id: "", name: "", description: "", price: "", destination: "kitchen", is_available: true });
   const [staff, setStaff] = useState<Staff[]>([]);
@@ -236,6 +238,14 @@ export default function Admin() {
     }
   };
 
+  const visibleMenuItems = menuItems.filter((item) => {
+    if (!showUnavailableMenuItems && !item.is_available) return false;
+    if (menuCategoryFilter && item.category_id !== menuCategoryFilter) return false;
+    const categoryName = categories.find((category) => category.id === item.category_id)?.name || "";
+    const searchText = `${item.name} ${item.description || ""} ${categoryName}`.toLocaleLowerCase();
+    return searchText.includes(menuSearch.trim().toLocaleLowerCase());
+  });
+
 
   return (
     <div className="max-w-6xl flex flex-col space-y-6">
@@ -303,8 +313,20 @@ export default function Admin() {
           <div className="flex gap-2 md:col-span-2"><button type="submit" className="bg-brand text-white rounded-lg px-4 py-2 font-medium">{menuEditingId ? t("Save changes") : t("Add food item")}</button>{menuEditingId && <button type="button" onClick={() => { setMenuEditingId(null); setMenuForm({ category_id: categories[0]?.id || "", name: "", description: "", price: "", destination: "kitchen", is_available: true }); }} className="border rounded-lg px-4 py-2">{t("Cancel")}</button>}</div>
           {categories.length === 0 && <p className="text-sm text-red-700 md:col-span-2">{t("Add a category first, then you can add dishes.")}</p>}
         </form>
-        <div className="mt-5 flex items-center justify-between gap-3"><p className="text-sm text-neutral-500">{showUnavailableMenuItems ? t("Showing available and unavailable dishes") : t("Showing available dishes only")}</p><button type="button" onClick={() => setShowUnavailableMenuItems((value) => !value)} className="text-sm font-medium text-brand underline">{showUnavailableMenuItems ? t("Hide unavailable items") : t("Show unavailable items")}</button></div>
-        <div className="mt-2 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2">{t("Food")}</th><th>{t("Category")}</th><th>{t("Price")}</th><th>{t("Send order to")}</th><th>{t("Status")}</th><th>{t("Actions")}</th></tr></thead><tbody>{menuItems.filter((item) => showUnavailableMenuItems || item.is_available).map((item) => <tr key={item.id} className="border-b last:border-0"><td className="py-2"><div className="font-medium">{item.name}</div>{item.description && <div className="text-xs text-neutral-500">{item.description}</div>}</td><td>{categories.find((category) => category.id === item.category_id)?.name || "—"}</td><td>Rs. {Number(item.price).toFixed(2)}</td><td className="capitalize">{t(item.destination)}</td><td>{item.is_available ? t("Available") : t("Unavailable")}</td><td><div className="flex gap-3"><button type="button" onClick={() => editMenuItem(item)} className="text-brand">{t("Edit")}</button><button type="button" onClick={() => deleteMenuItem(item)} className="text-red-700">{t("Delete")}</button></div></td></tr>)}</tbody></table>{menuItems.filter((item) => showUnavailableMenuItems || item.is_available).length === 0 && <p className="py-4 text-sm text-neutral-500">{showUnavailableMenuItems ? t("No food items yet. Add your first dish above.") : t("No available dishes. Use Show unavailable items to view archived dishes.")}</p>}</div>
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-neutral-500">{showUnavailableMenuItems ? t("Showing available and unavailable dishes") : t("Showing available dishes only")}</p><button type="button" onClick={() => setShowUnavailableMenuItems((value) => !value)} className="text-sm font-medium text-brand underline">{showUnavailableMenuItems ? t("Hide unavailable items") : t("Show unavailable items")}</button></div>
+        <div className="mt-3 grid gap-3 md:grid-cols-[1fr_220px_auto]">
+          <label className="relative block">
+            <span className="sr-only">{t("Search food items")}</span>
+            <input type="search" value={menuSearch} onChange={(e) => setMenuSearch(e.target.value)} placeholder={t("Search by food name, description or category...")} className="w-full rounded-lg border px-3 py-2" />
+          </label>
+          <select aria-label={t("Filter by category")} value={menuCategoryFilter} onChange={(e) => setMenuCategoryFilter(e.target.value)} className="w-full rounded-lg border px-3 py-2">
+            <option value="">{t("All categories")}</option>
+            {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+          </select>
+          <button type="button" onClick={() => { setMenuSearch(""); setMenuCategoryFilter(""); }} className="rounded-lg border px-3 py-2 text-sm">{t("Clear search")}</button>
+        </div>
+        <p className="mt-2 text-xs text-neutral-500">{t("Items found")}: {visibleMenuItems.length}</p>
+        <div className="mt-2 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2">{t("Food")}</th><th>{t("Category")}</th><th>{t("Price")}</th><th>{t("Send order to")}</th><th>{t("Status")}</th><th>{t("Actions")}</th></tr></thead><tbody>{visibleMenuItems.map((item) => <tr key={item.id} className="border-b last:border-0"><td className="py-2"><div className="font-medium">{item.name}</div>{item.description && <div className="text-xs text-neutral-500">{item.description}</div>}</td><td>{categories.find((category) => category.id === item.category_id)?.name || "—"}</td><td>Rs. {Number(item.price).toFixed(2)}</td><td className="capitalize">{t(item.destination)}</td><td>{item.is_available ? t("Available") : t("Unavailable")}</td><td><div className="flex gap-3"><button type="button" onClick={() => editMenuItem(item)} className="text-brand">{t("Edit")}</button><button type="button" onClick={() => deleteMenuItem(item)} className="text-red-700">{t("Delete")}</button></div></td></tr>)}</tbody></table>{visibleMenuItems.length === 0 && <p className="py-4 text-sm text-neutral-500">{menuSearch || menuCategoryFilter ? t("No food items match your search.") : showUnavailableMenuItems ? t("No food items yet. Add your first dish above.") : t("No available dishes. Use Show unavailable items to view archived dishes.")}</p>}</div>
       </section>
 
       <section className="bg-white rounded-xl shadow p-5">
