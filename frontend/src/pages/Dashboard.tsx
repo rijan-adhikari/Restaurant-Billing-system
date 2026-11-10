@@ -47,11 +47,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     load().catch(() => setError("Could not load dashboard metrics."));
-    if (role === "admin" || role === "manager") {
-      api.get("/api/operations/inventory").then((response) => setLowStockItems(response.data.filter((item: any) => item.low_stock))).catch(() => setLowStockItems([]));
-    } else {
-      setLowStockItems([]);
-    }
+    api.get("/api/dashboard/low-stock").then((response) => setLowStockItems(response.data)).catch(() => setLowStockItems([]));
   }, [reportDate, role]);
 
   const clearSales = async () => {
@@ -118,7 +114,7 @@ export default function Dashboard() {
         <Link to="/operations?tab=inventory" className="rounded-xl border bg-white p-4 shadow-sm hover:border-brand"><p className="font-semibold">{t("Inventory")}</p><p className="text-sm text-neutral-500">{t("Open stock register and manage stock levels")}</p></Link>
         <Link to="/operations?tab=expenses" className="rounded-xl border bg-white p-4 shadow-sm hover:border-brand"><p className="font-semibold">{t("Expenses")}</p><p className="text-sm text-neutral-500">{t("Open expense register and record expenses")}</p></Link>
       </div>}
-      {(role === "admin" || role === "manager") && lowStockItems.length > 0 && <section className="rounded-xl border border-amber-300 bg-amber-50 p-5">
+      {lowStockItems.length > 0 && <section className="rounded-xl border border-amber-300 bg-amber-50 p-5">
         <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold text-amber-900">{t("Low stock alert")}</h2><span className="rounded-full bg-amber-200 px-3 py-1 text-sm font-semibold text-amber-900">{lowStockItems.length}</span></div>
         <p className="mt-1 text-sm text-amber-900">{t("These items are at or below their reorder level. This alert appears whenever you open the dashboard until stock is replenished.")}</p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{lowStockItems.map((item) => <div key={item.id} className="rounded-lg border border-amber-200 bg-white p-3 text-sm"><p className="font-semibold">{item.name}</p><p>{t("On hand")}: {item.quantity} {item.unit}</p><p>{t("Reorder")}: {item.reorder_level} {item.unit}</p></div>)}</div>
