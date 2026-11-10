@@ -13,6 +13,7 @@ export default function Billing() {
   const [method, setMethod] = useState("cash");
   const [amount, setAmount] = useState("");
   const [discountPercent, setDiscountPercent] = useState("0");
+  const [discountAmount, setDiscountAmount] = useState("0");
   const [loyaltyPoints, setLoyaltyPoints] = useState("0");
   const [loyaltyBalance, setLoyaltyBalance] = useState(0);
   const [pointValue, setPointValue] = useState(1);
@@ -22,7 +23,7 @@ export default function Billing() {
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
   const [result, setResult] = useState<any>(null);
-  const [preview, setPreview] = useState<{ order: OpenOrder; discountAmount: string; loyaltyDiscount: string; loyaltyPoints: string; totalDiscountAmount: string; taxAmount: string; serviceAmount: string; grandTotal: string; amountReceived: string; remainingCredit: string; changeDue: string } | null>(null);
+  const [preview, setPreview] = useState<{ order: OpenOrder; discountPercentAmount: string; fixedDiscountAmount: string; loyaltyDiscount: string; loyaltyPoints: string; totalDiscountAmount: string; taxAmount: string; serviceAmount: string; grandTotal: string; amountReceived: string; remainingCredit: string; changeDue: string } | null>(null);
   const [error, setError] = useState("");
 
   const loadData = async () => {
@@ -65,14 +66,19 @@ export default function Billing() {
       return;
     }
     const subtotal = Number(selectedOrder.subtotal);
-    const discountAmount = roundMoney(subtotal * percent / 100);
+    const percentDiscountAmount = roundMoney(subtotal * percent / 100);
+    const fixedDiscountAmount = Number(discountAmount || 0);
+    if (!Number.isFinite(fixedDiscountAmount) || fixedDiscountAmount < 0) {
+      setError("Enter a valid fixed discount amount.");
+      return;
+    }
     const points = Number(loyaltyPoints || 0);
     if (!Number.isFinite(points) || points < 0 || (points > 0 && (!loyaltyEnabled || !customerId || points > loyaltyBalance))) {
       setError("Check the customer, loyalty status and available points before redeeming.");
       return;
     }
     const loyaltyDiscount = roundMoney(points * pointValue);
-    const totalDiscountAmount = roundMoney(discountAmount + loyaltyDiscount);
+    const totalDiscountAmount = roundMoney(percentDiscountAmount + fixedDiscountAmount + loyaltyDiscount);
     if (totalDiscountAmount > subtotal) {
       setError("Discounts and loyalty redemption cannot exceed the bill subtotal.");
       return;
@@ -96,7 +102,7 @@ export default function Billing() {
       setError("Select a customer so the remaining amount can be added to Credit.");
       return;
     }
-    setPreview({ order: selectedOrder, discountAmount: discountAmount.toFixed(2), loyaltyDiscount: loyaltyDiscount.toFixed(2), loyaltyPoints: points.toFixed(0), totalDiscountAmount: totalDiscountAmount.toFixed(2),
+    setPreview({ order: selectedOrder, discountPercentAmount: percentDiscountAmount.toFixed(2), fixedDiscountAmount: fixedDiscountAmount.toFixed(2), loyaltyDiscount: loyaltyDiscount.toFixed(2), loyaltyPoints: points.toFixed(0), totalDiscountAmount: totalDiscountAmount.toFixed(2),
       taxAmount: taxAmount.toFixed(2), serviceAmount: serviceAmount.toFixed(2),
       grandTotal: grandTotal.toFixed(2), amountReceived: amountReceived.toFixed(2),
       remainingCredit: remainingCredit.toFixed(2), changeDue: changeDue.toFixed(2) });
@@ -136,6 +142,7 @@ export default function Billing() {
         order_id: orderId,
         customer_id: customerId || null,
         discount_percent: Number(discountPercent || 0),
+        discount_amount: Number(discountAmount || 0),
         loyalty_points_redeemed: Number(loyaltyPoints || 0),
         payments: [{ method, amount: method === "credit" ? 0 : Number(amount) }],
       });
@@ -193,6 +200,8 @@ export default function Billing() {
 
         <label className="block text-sm font-medium">Discount (%)</label>
           <input type="number" min="0" max="100" step="0.01" className="w-full border rounded-lg px-3 py-2" value={discountPercent} onChange={(e) => { setDiscountPercent(e.target.value); setPreview(null); }} />
+        <label className="block text-sm font-medium">Discount amount (NPR)</label>
+          <input type="number" min="0" step="0.01" className="w-full border rounded-lg px-3 py-2" value={discountAmount} onChange={(e) => { setDiscountAmount(e.target.value); setPreview(null); }} placeholder="Enter fixed discount in rupees" />
 
         <p className="text-xs text-neutral-500">For a partial payment, the unpaid remainder is automatically added to the selected customer&apos;s Credit account.</p>
         <label className="block text-sm font-medium">Customer for outstanding balance</label>
@@ -213,7 +222,7 @@ export default function Billing() {
         </div>
 
         <button onClick={previewBill} className="w-full border border-brand text-brand rounded-lg py-2 font-medium">Preview bill</button>
-          {preview && <div className="border-2 border-dashed border-brand/40 rounded-lg p-4 space-y-3"><div className="text-center"><img src="/images/logo.png" alt="Restaurant logo" className="mx-auto w-16 h-16 object-contain rounded-full" /><p className="font-semibold">{preview.order.order_number} - {preview.order.service_type && preview.order.service_type !== "dine_in" ? preview.order.table_name : "Table " + preview.order.table_name}</p><p className="text-sm text-neutral-500">Preview only - not yet added to sales</p></div><div className="space-y-1 text-sm">{preview.order.items.map((item) => <div key={item.name} className="flex justify-between"><span>{item.quantity} x {item.name} (Rs. {item.unit_price})</span><span>Rs. {item.total}</span></div>)}{preview.order.cabin_fee && Number(preview.order.cabin_fee) > 0 && <div className="flex justify-between"><span>Cabin fee</span><span>Rs. {preview.order.cabin_fee}</span></div>}{Number(preview.order.delivery_fee || 0) > 0 && <div className="flex justify-between"><span>Delivery fee</span><span>Rs. {preview.order.delivery_fee}</span></div>}{preview.order.delivery_address && <p className="text-xs text-neutral-500">Delivery to: {preview.order.delivery_address}</p>}</div><div className="border-t pt-2 text-sm space-y-1"><p className="flex justify-between"><span>Subtotal</span><span>Rs. {preview.order.subtotal}</span></p><p className="flex justify-between"><span>Discount ({discountPercent}%)</span><span>- Rs. {preview.discountAmount}</span></p>{Number(preview.loyaltyDiscount) > 0 && <p className="flex justify-between"><span>Loyalty ({preview.loyaltyPoints} points)</span><span>- Rs. {preview.loyaltyDiscount}</span></p>}<p className="flex justify-between font-medium"><span>Total discounts</span><span>- Rs. {preview.totalDiscountAmount}</span></p><p className="flex justify-between"><span>Tax</span><span>Rs. {preview.taxAmount}</span></p><p className="flex justify-between"><span>Service charge</span><span>Rs. {preview.serviceAmount}</span></p><p className="flex justify-between font-semibold"><span>Grand total</span><span>Rs. {preview.grandTotal}</span></p><p className="flex justify-between"><span>Amount tendered</span><span>Rs. {preview.amountReceived}</span></p>{Number(preview.changeDue) > 0 && <p className="flex justify-between font-semibold text-emerald-700"><span>Change due</span><span>Rs. {preview.changeDue}</span></p>}<p className="flex justify-between font-semibold text-amber-700"><span>Remaining credit</span><span>Rs. {preview.remainingCredit}</span></p><p className="flex justify-between"><span>Payment method</span><span>{method}</span></p>{selectedCustomer && <p className="flex justify-between"><span>Customer</span><span>{selectedCustomer.name}</span></p>}</div><button onClick={submit} className="w-full bg-brand text-white rounded-lg py-2 font-medium">Generate Bill and add to sales</button></div>}
+          {preview && <div className="border-2 border-dashed border-brand/40 rounded-lg p-4 space-y-3"><div className="text-center"><img src="/images/logo.png" alt="Restaurant logo" className="mx-auto w-16 h-16 object-contain rounded-full" /><p className="font-semibold">{preview.order.order_number} - {preview.order.service_type && preview.order.service_type !== "dine_in" ? preview.order.table_name : "Table " + preview.order.table_name}</p><p className="text-sm text-neutral-500">Preview only - not yet added to sales</p></div><div className="space-y-1 text-sm">{preview.order.items.map((item) => <div key={item.name} className="flex justify-between"><span>{item.quantity} x {item.name} (Rs. {item.unit_price})</span><span>Rs. {item.total}</span></div>)}{preview.order.cabin_fee && Number(preview.order.cabin_fee) > 0 && <div className="flex justify-between"><span>Cabin fee</span><span>Rs. {preview.order.cabin_fee}</span></div>}{Number(preview.order.delivery_fee || 0) > 0 && <div className="flex justify-between"><span>Delivery fee</span><span>Rs. {preview.order.delivery_fee}</span></div>}{preview.order.delivery_address && <p className="text-xs text-neutral-500">Delivery to: {preview.order.delivery_address}</p>}</div><div className="border-t pt-2 text-sm space-y-1"><p className="flex justify-between"><span>Subtotal</span><span>Rs. {preview.order.subtotal}</span></p><p className="flex justify-between"><span>Discount ({discountPercent}%)</span><span>- Rs. {preview.discountPercentAmount}</span></p>{Number(preview.fixedDiscountAmount) > 0 && <p className="flex justify-between"><span>Discount amount</span><span>- Rs. {preview.fixedDiscountAmount}</span></p>}{Number(preview.loyaltyDiscount) > 0 && <p className="flex justify-between"><span>Loyalty ({preview.loyaltyPoints} points)</span><span>- Rs. {preview.loyaltyDiscount}</span></p>}<p className="flex justify-between font-medium"><span>Total discounts</span><span>- Rs. {preview.totalDiscountAmount}</span></p><p className="flex justify-between"><span>Tax</span><span>Rs. {preview.taxAmount}</span></p><p className="flex justify-between"><span>Service charge</span><span>Rs. {preview.serviceAmount}</span></p><p className="flex justify-between font-semibold"><span>Grand total</span><span>Rs. {preview.grandTotal}</span></p><p className="flex justify-between"><span>Amount tendered</span><span>Rs. {preview.amountReceived}</span></p>{Number(preview.changeDue) > 0 && <p className="flex justify-between font-semibold text-emerald-700"><span>Change due</span><span>Rs. {preview.changeDue}</span></p>}<p className="flex justify-between font-semibold text-amber-700"><span>Remaining credit</span><span>Rs. {preview.remainingCredit}</span></p><p className="flex justify-between"><span>Payment method</span><span>{method}</span></p>{selectedCustomer && <p className="flex justify-between"><span>Customer</span><span>{selectedCustomer.name}</span></p>}</div><button onClick={submit} className="w-full bg-brand text-white rounded-lg py-2 font-medium">Generate Bill and add to sales</button></div>}
         {error && <p className="text-red-600 text-sm">{error}</p>}
         {result && (
           <div id="printable-bill" className="text-sm border-t pt-4 mt-2 space-y-3">
@@ -232,7 +241,7 @@ export default function Billing() {
             </div>
             <div className="border-t pt-2 space-y-1">
               <p className="flex justify-between"><span>Subtotal</span><span>Rs. {result.subtotal}</span></p>
-              <p className="flex justify-between"><span>Discount ({result.discount_percent}%)</span><span>- Rs. {(Number(result.discount_amount || 0) - Number(result.loyalty_discount_amount || 0)).toFixed(2)}</span></p>{Number(result.loyalty_discount_amount || 0) > 0 && <p className="flex justify-between"><span>Loyalty redemption ({result.loyalty_points_redeemed} points)</span><span>- Rs. {result.loyalty_discount_amount}</span></p>}
+              <p className="flex justify-between"><span>Discount ({result.discount_percent}%)</span><span>- Rs. {result.discount_percent_amount || "0.00"}</span></p>{Number(result.fixed_discount_amount || 0) > 0 && <p className="flex justify-between"><span>Discount amount</span><span>- Rs. {result.fixed_discount_amount}</span></p>}{Number(result.loyalty_discount_amount || 0) > 0 && <p className="flex justify-between"><span>Loyalty redemption ({result.loyalty_points_redeemed} points)</span><span>- Rs. {result.loyalty_discount_amount}</span></p>}
               <p className="flex justify-between"><span>Tax ({result.tax_percent}%)</span><span>Rs. {result.tax_amount}</span></p>
               <p className="flex justify-between"><span>Service charge ({result.service_charge_percent}%)</span><span>Rs. {result.service_charge_amount}</span></p>
               <p className="flex justify-between border-t pt-2 font-semibold"><span>Grand total</span><span>Rs. {result.grand_total}</span></p>
