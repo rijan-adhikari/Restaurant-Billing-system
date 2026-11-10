@@ -108,7 +108,7 @@ async def create_order(payload: schemas.OrderCreate, db: Session = Depends(get_d
 @router.get("/orders/open")
 def list_open_orders(db: Session = Depends(get_db),
                      user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager,
-                                                 models.RoleName.cashier))):
+                                                 models.RoleName.cashier, models.RoleName.waiter))):
     orders = db.query(models.Order).filter(models.Order.status == models.OrderStatus.open).all()
     tax_setting = db.query(models.TaxSetting).first()
     result = []
@@ -127,6 +127,7 @@ def list_open_orders(db: Session = Depends(get_db),
                                 service_enabled, service_percent)
         result.append({
             "id": order.id,
+            "table_id": order.table_id,
             "order_number": order.order_number,
             "table_name": service_details["service_type"].title() if service_details else (order.table.name if order.table else ""),
             "service_type": service_details["service_type"] if service_details else "dine_in",
@@ -142,9 +143,12 @@ def list_open_orders(db: Session = Depends(get_db),
             "grand_total": str(totals["grand_total"]),
             "cabin_fee": str(CABIN_FEE) if order.table and "cabin" in order.table.name.lower() else "0.00",
             "items": [{
+                "id": item.id,
+                "menu_item_id": item.menu_item_id,
                 "name": item.menu_item.name,
                 "quantity": item.quantity,
                 "unit_price": str(item.unit_price),
+                "notes": item.notes or "",
                 "total": str(Decimal(item.unit_price) * item.quantity),
             } for item in order.items if not item.is_cancelled],
         })
