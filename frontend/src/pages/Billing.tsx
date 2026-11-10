@@ -61,8 +61,8 @@ export default function Billing() {
     setError("");
     const selectedOrder = orders.find((order) => order.id === orderId);
     const percent = Number(discountPercent || 0);
-    if (!selectedOrder || percent < 0 || percent > 100) {
-      setError("Select an open order and enter a discount between 0% and 100%.");
+    if (!selectedOrder || !Number.isFinite(percent) || percent < 0 || percent > 100) {
+      setError("Select an open order and enter a valid discount between 0% and 100%.");
       return;
     }
     const subtotal = Number(selectedOrder.subtotal);
