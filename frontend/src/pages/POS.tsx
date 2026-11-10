@@ -5,6 +5,7 @@ import { api } from "../api/client";
 interface Category { id: string; name: string; }
 interface MenuItem { id: string; category_id: string; name: string; price: string; is_available: boolean; }
 interface CartLine { menu_item_id: string; name: string; price: number; quantity: number; notes: string; }
+interface SentOrderLine { id: string; menu_item_id: string; name: string; quantity: number; unit_price: string; notes: string; total: string; }
 interface TableRow { id: string; floor_id: string; name: string; status: string; capacity: number; }
 
 export default function POS() {
@@ -21,6 +22,7 @@ export default function POS() {
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState("");
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
+  const [sentOrderItems, setSentOrderItems] = useState<SentOrderLine[]>([]);
   const [taxSettings, setTaxSettings] = useState({ tax_enabled: false, tax_percent: "0", service_charge_enabled: false, service_charge_percent: "0" });
   const [serviceCustomerName, setServiceCustomerName] = useState("");
   const [servicePhone, setServicePhone] = useState("");
@@ -40,6 +42,25 @@ export default function POS() {
     api.get("/api/menu-items").then((res) => setItems(res.data));
     api.get("/api/settings/tax").then((res) => setTaxSettings(res.data)).catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (!tableId || isServiceOrder) return;
+    let cancelled = false;
+    api.get("/api/orders/open").then((res) => {
+      if (cancelled) return;
+      const openOrder = (res.data || []).find((order: any) => order.table_id === tableId);
+      if (openOrder) {
+        setActiveOrderId(openOrder.id);
+        setSentOrderItems(openOrder.items || []);
+      } else {
+        setActiveOrderId(null);
+        setSentOrderItems([]);
+      }
+    }).catch(() => {
+      if (!cancelled) setMessage("Could not load the table's current order. Please refresh or contact a manager.");
+    });
+    return () => { cancelled = true; };
+  }, [tableId, isServiceOrder]);
 
   const addToCart = (item: MenuItem) => {
     setCart((prev) => {
@@ -61,7 +82,10 @@ export default function POS() {
     );
   };
 
-  const itemSubtotal = roundMoney(cart.reduce((sum, l) => sum + l.price * l.quantity, 0));
+  const itemSubtotal = roundMoney(
+    sentOrderItems.reduce((sum, line) => sum + Number(line.total || Number(line.unit_price) * line.quantity), 0) +
+    cart.reduce((sum, line) => sum + line.price * line.quantity, 0)
+  );
   const cabinFee = isCabinOrder ? 500 : 0;
   const effectiveDeliveryFee = serviceType === "delivery" ? Math.max(0, Number(deliveryFee || 0)) : 0;
   const subtotal = roundMoney(itemSubtotal + cabinFee + effectiveDeliveryFee);
@@ -86,6 +110,11 @@ export default function POS() {
       });
       setActiveOrderId(response.data.id);
       setCart([]);
+      if (!isServiceOrder) {
+        const refreshed = await api.get("/api/orders/open");
+        const openOrder = (refreshed.data || []).find((order: any) => order.id === response.data.id);
+        setSentOrderItems(openOrder?.items || []);
+      }
       setMessage("KOT sent to kitchen/bar.");
     } catch {
       setMessage("Failed to send KOT.");
@@ -99,6 +128,7 @@ export default function POS() {
     try {
       await api.patch(`/api/orders/${activeOrderId}/cancel`);
       setActiveOrderId(null);
+      setSentOrderItems([]);
       setCart([]);
       setMessage("Order cancelled.");
     } catch (e: any) {
@@ -169,8 +199,18 @@ export default function POS() {
         </div>
 
         <div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-bold">Current order</h2><span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs text-neutral-600">{cart.reduce((sum, line) => sum + line.quantity, 0)} items</span></div>
-        {cart.length === 0 && <p className="text-sm text-neutral-400">No items yet.</p>}
+        {cart.length === 0 && sentOrderItems.length === 0 && <p className="text-sm text-neutral-400">No items yet.</p>}
         <div className="space-y-2 mb-4">
+          {sentOrderItems.map((line) => (
+            <div key={line.id} className="flex items-center justify-between text-sm rounded-lg bg-emerald-50 px-3 py-2">
+              <div>
+                <div className="font-medium">{line.name}</div>
+                <div className="text-neutral-500">{line.quantity} x Rs. {Number(line.unit_price).toFixed(2)}{line.notes ? " · " + line.notes : ""}</div>
+                <div className="text-[11px] font-semibold text-emerald-700">Sent to kitchen/bar</div>
+              </div>
+              <span>Rs. {Number(line.total).toFixed(2)}</span>
+            </div>
+          ))}
           {cart.map((l) => (
             <div key={l.menu_item_id} className="flex items-center justify-between text-sm">
               <div>
