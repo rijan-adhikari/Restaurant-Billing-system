@@ -39,6 +39,7 @@ const translations: Record<string, string> = {
   "Hide food menu": "मेनु लुकाउनुहोस्", "Show food menu": "मेनु देखाउनुहोस्",
   "Food menu is hidden. Click “Show food menu” to view and edit items.": "मेनु लुकाइएको छ। खाना हेर्न र सम्पादन गर्न “मेनु देखाउनुहोस्” थिच्नुहोस्।",
   "Food": "खाना", "Available": "उपलब्ध", "Unavailable": "अनुपलब्ध",
+  "Search food items": "खाना खोज्नुहोस्", "Search by food name, description or category...": "खानाको नाम, विवरण वा वर्गबाट खोज्नुहोस्...", "Filter by category": "वर्गअनुसार छान्नुहोस्", "All categories": "सबै वर्ग", "Clear search": "खोजी हटाउनुहोस्", "Items found": "भेटिएका परिकार", "No food items match your search.": "तपाईंको खोजीसँग मिल्ने परिकार भेटिएन।",
   "Showing available and unavailable dishes": "उपलब्ध र अनुपलब्ध दुवै परिकार देखाइँदैछ", "Showing available dishes only": "उपलब्ध परिकार मात्र देखाइँदैछ",
   "Hide unavailable items": "अनुपलब्ध परिकार लुकाउनुहोस्", "Show unavailable items": "अनुपलब्ध परिकार देखाउनुहोस्",
   "No available dishes. Use Show unavailable items to view archived dishes.": "कुनै उपलब्ध परिकार छैन। पुराना परिकार हेर्न अनुपलब्ध परिकार देखाउनुहोस् थिच्नुहोस्।",
