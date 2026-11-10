@@ -106,8 +106,12 @@ def restore_database_backup(backup_file: UploadFile = File(...),
 
 
 def audit(db: Session, user_id: str, action: str, details: str = "") -> None:
-    db.execute(text("INSERT INTO audit_logs(user_id,action,details) VALUES(:user,:action,:details)"),
-               {"user": user_id, "action": action, "details": details})
+    # Raw SQL bypasses SQLAlchemy's Python-side AuditLog.id default, so generate
+    # the UUID explicitly rather than relying on a database-side default.
+    db.execute(
+        text("INSERT INTO audit_logs(id,user_id,action,details) VALUES(:id,:user,:action,:details)"),
+        {"id": str(uuid.uuid4()), "user": user_id, "action": action, "details": details},
+    )
 
 
 class ShiftOpen(BaseModel):
