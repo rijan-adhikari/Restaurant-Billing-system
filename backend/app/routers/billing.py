@@ -54,12 +54,14 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
     if (not payload.discount_percent.is_finite()
             or payload.discount_percent < 0 or payload.discount_percent > 100):
         raise HTTPException(status_code=422, detail="Discount percentage must be between 0 and 100")
+    fixed_discount = payload.discount_amount
+    if not fixed_discount.is_finite() or fixed_discount < 0:
+        raise HTTPException(status_code=422, detail="Fixed discount must be a non-negative finite amount")
     points_redeemed = payload.loyalty_points_redeemed
     if not points_redeemed.is_finite() or points_redeemed < 0:
         raise HTTPException(status_code=422, detail="Loyalty points redemption must be a non-negative finite amount")
     loyalty_discount = Decimal("0.00")
     loyalty_account = None
-    effective_discount_percent = payload.discount_percent
     if points_redeemed > 0:
         if not payload.customer_id:
             raise HTTPException(status_code=400, detail="Select a customer to redeem loyalty points")
@@ -71,19 +73,18 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
         if not loyalty_account or points_redeemed > Decimal(str(loyalty_account["points_balance"])):
             raise HTTPException(status_code=409, detail="Customer does not have enough loyalty points")
         loyalty_discount = money(points_redeemed * Decimal(str(loyalty_rules["point_value"])))
-        percentage_discount = money(subtotal * payload.discount_percent / Decimal("100"))
-        combined_discount = percentage_discount + loyalty_discount
-        if combined_discount > subtotal:
-            raise HTTPException(status_code=422, detail="Combined discount and loyalty redemption cannot exceed the subtotal")
-        effective_discount_percent = combined_discount * Decimal("100") / subtotal if subtotal else Decimal("0")
+    percent_discount_amount = money(subtotal * payload.discount_percent / Decimal("100"))
+    combined_discount = money(percent_discount_amount + fixed_discount + loyalty_discount)
+    if combined_discount > subtotal:
+        raise HTTPException(status_code=422, detail="Percentage, fixed and loyalty discounts cannot exceed the subtotal")
 
     tax_setting = db.query(models.TaxSetting).first()
     tax_enabled = bool(tax_setting and tax_setting.tax_enabled)
     tax_percent = Decimal(tax_setting.tax_percent) if tax_setting else Decimal("0")
     service_enabled = bool(tax_setting and tax_setting.service_charge_enabled)
     service_percent = Decimal(tax_setting.service_charge_percent) if tax_setting else Decimal("0")
-    totals = calculate_bill(subtotal, effective_discount_percent, tax_enabled, tax_percent,
-                            service_enabled, service_percent)
+    totals = calculate_bill(subtotal, payload.discount_percent, tax_enabled, tax_percent,
+                            service_enabled, service_percent, fixed_discount + loyalty_discount)
     subtotal = totals["subtotal"]
     tax_amount = totals["tax_amount"]
     service_amount = totals["service_charge_amount"]
@@ -216,7 +217,10 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
     return {
         "id": bill.id, "bill_number": bill.bill_number, "subtotal": str(subtotal),
         "tax_amount": str(tax_amount), "service_charge_amount": str(service_amount),
-        "discount_percent": str(payload.discount_percent), "discount_amount": str(discount_amount),
+        "discount_percent": str(payload.discount_percent),
+        "discount_percent_amount": str(percent_discount_amount),
+        "fixed_discount_amount": str(fixed_discount),
+        "discount_amount": str(discount_amount),
         "loyalty_points_redeemed": str(points_redeemed), "loyalty_discount_amount": str(loyalty_discount),
         "grand_total": str(grand_total), "amount_paid": str(total_paid),
         "tendered_amount": str(tendered_total), "change_due": str(change_due),
