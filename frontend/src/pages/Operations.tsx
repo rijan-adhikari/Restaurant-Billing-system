@@ -20,7 +20,7 @@ export default function Operations() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [stock, setStock] = useState({ name: "", quantity: "0", reorder_level: "0", total_cost: "0", supplier_name: "", expiry_date: "" });
+  const [stock, setStock] = useState({ name: "", unit: "kg", quantity: "0", reorder_level: "0", total_cost: "0", supplier_name: "", expiry_date: "" });
   const [supplier, setSupplier] = useState({ name: "", phone: "", email: "", address: "", tax_number: "" });
   const [purchase, setPurchase] = useState({ supplier_id: "", items: [{ item_id: "", quantity: "", unit_cost: "" }], notes: "" });
   const [recipe, setRecipe] = useState({ menu_item_id: "", items: [{ item_id: "", quantity: "1" }], yield_quantity: "1", instructions: "" });
@@ -80,7 +80,7 @@ export default function Operations() {
             name: stock.name,
             sku: null,
             category: "General",
-            unit: "pcs",
+            unit: stock.unit,
             quantity,
             reorder_level: Number(stock.reorder_level),
             average_cost: quantity > 0 ? totalCost / quantity : 0,
@@ -93,12 +93,12 @@ export default function Operations() {
         {input("Supplier name", stock.supplier_name, (v) => setStock({ ...stock, supplier_name: v }))}
         {input("Expiry date", stock.expiry_date, (v) => setStock({ ...stock, expiry_date: v }), "date", false)}
         <label className="block text-xs font-medium text-neutral-600">{t("Total cost (NPR)")}<input className={field + " mt-1"} type="number" min="0" step="0.01" required value={stock.total_cost} onChange={(e) => setStock({ ...stock, total_cost: e.target.value })} /></label>
-        <label className="block text-xs font-medium text-neutral-600">{t("Quantity")}<input className={field + " mt-1"} type="number" min="0" step="any" required value={stock.quantity} onChange={(e) => setStock({ ...stock, quantity: e.target.value })} /></label>
+        <div className="grid grid-cols-2 gap-2"><label className="block text-xs font-medium text-neutral-600">{t("Unit")}<select className={field + " mt-1"} value={stock.unit} onChange={(e) => setStock({ ...stock, unit: e.target.value })}><option value="kg">kg</option><option value="g">gram (g)</option><option value="litre">litre</option></select></label><label className="block text-xs font-medium text-neutral-600">{t("Quantity")}<input className={field + " mt-1"} type="number" min="0" step="any" required value={stock.quantity} onChange={(e) => setStock({ ...stock, quantity: e.target.value })} /></label></div>
         <label className="block text-xs font-medium text-neutral-600">{t("Reorder level")}<input className={field + " mt-1"} type="number" min="0" step="any" required value={stock.reorder_level} onChange={(e) => setStock({ ...stock, reorder_level: e.target.value })} /></label>
         <button className={button} disabled={busy}>{t("Add item")}</button>
       </form></section>
       <section className={panel}>{heading("Stock register", "Quantity, valuation and low-stock alerts.")}{lowStock.length > 0 && <p className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">{lowStock.length} {t("item(s) at or below reorder level.")}</p>}
-        <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b text-xs text-neutral-500"><th className="py-2">{t("Item name")}</th><th>{t("Supplier name")}</th><th>{t("Quantity")}</th><th>{t("Reorder level")}</th><th>{t("Total cost (NPR)")}</th><th>{t("Expiry date")}</th><th>{t("Status")}</th></tr></thead><tbody>{data.inventory.map((i: any) => <tr key={i.id} className="border-b"><td className="py-3 font-medium">{i.name}</td><td>{i.supplier_name || "—"}</td><td>{i.quantity}</td><td>{i.reorder_level}</td><td>{money(i.stock_value)}</td><td>{i.expiry_date || "—"}</td><td className={i.low_stock ? "text-amber-700" : "text-emerald-700"}>{i.low_stock ? t("Low") : t("OK")}</td></tr>)}</tbody></table></div>
+        <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b text-xs text-neutral-500"><th className="py-2">{t("Item name")}</th><th>{t("Supplier name")}</th><th>{t("Quantity")}</th><th>{t("Reorder level")}</th><th>{t("Total cost (NPR)")}</th><th>{t("Expiry date")}</th><th>{t("Status")}</th></tr></thead><tbody>{data.inventory.map((i: any) => <tr key={i.id} className="border-b"><td className="py-3 font-medium">{i.name}</td><td>{i.supplier_name || "—"}</td><td>{i.quantity} {i.unit}</td><td>{i.reorder_level} {i.unit}</td><td>{money(i.stock_value)}</td><td>{i.expiry_date || "—"}</td><td className={i.low_stock ? "text-amber-700" : "text-emerald-700"}>{i.low_stock ? t("Low") : t("OK")}</td></tr>)}</tbody></table></div>
         <form className="mt-4 grid gap-2 rounded-lg bg-neutral-50 p-3 md:grid-cols-4" onSubmit={(e) => { e.preventDefault(); run(() => api.post("/api/operations/inventory/" + movement.item_id + "/movements", { ...movement, quantity: Number(movement.quantity) }), "Stock movement recorded."); }}>
           <select className={field} required value={movement.item_id} onChange={(e) => setMovement({ ...movement, item_id: e.target.value })}><option value="">{t("Select item")}</option>{data.inventory.map((i: any) => <option key={i.id} value={i.id}>{i.name}</option>)}</select>
           <select className={field} value={movement.movement_type} onChange={(e) => setMovement({ ...movement, movement_type: e.target.value })}><option value="waste">{t("Wastage")}</option><option value="consumption">{t("Consumption")}</option><option value="return">{t("Return")}</option><option value="adjustment">{t("Stock count adjustment")}</option></select>
