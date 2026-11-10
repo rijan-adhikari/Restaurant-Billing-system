@@ -3,6 +3,7 @@ import { api } from "../api/client";
 import { useLanguage } from "../context/LanguageContext";
 
 interface Category { id: string; name: string; }
+interface MenuItem { id: string; category_id: string; name: string; description: string; price: string; destination: string; is_available: boolean; }
 interface Staff { id: string; username: string; full_name: string; role: string; is_active: boolean; }
 interface Customer { id: string; name: string; phone?: string | null; }
 interface CustomerHistory {
@@ -27,6 +28,9 @@ const staffRoles = ["admin", "manager", "waiter", "cashier", "kitchen", "bar"] a
 export default function Admin() {
   const { t } = useLanguage();
   const [categories, setCategories] = useState<Category[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [menuEditingId, setMenuEditingId] = useState<string | null>(null);
+  const [menuForm, setMenuForm] = useState({ category_id: "", name: "", description: "", price: "", destination: "kitchen", is_available: true });
   const [staff, setStaff] = useState<Staff[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [history, setHistory] = useState<CustomerHistory[]>([]);
@@ -43,14 +47,17 @@ export default function Admin() {
   const [error, setError] = useState("");
 
   const load = async () => {
-    const [categoryResponse, staffResponse, customerResponse] = await Promise.all([
+    const [categoryResponse, staffResponse, customerResponse, menuResponse] = await Promise.all([
       api.get("/api/categories"),
       api.get("/api/users"),
       api.get("/api/customers"),
+      api.get("/api/menu-items"),
     ]);
     setCategories(categoryResponse.data);
     setStaff(staffResponse.data);
     setCustomers(customerResponse.data);
+    setMenuItems(menuResponse.data);
+    if (!menuForm.category_id && categoryResponse.data.length) setMenuForm((current) => ({ ...current, category_id: categoryResponse.data[0].id }));
   };
 
   const searchHistory = async () => {
@@ -96,6 +103,56 @@ export default function Admin() {
       await load();
     } catch (e: any) {
       setError(e?.response?.data?.detail || "Could not remove dishes.");
+    }
+  };
+
+  const saveMenuItem = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError("");
+    setMessage("");
+    if (!menuForm.category_id) { setError("Add a category before adding food."); return; }
+    try {
+      const payload = { ...menuForm, price: Number(menuForm.price) };
+      if (!Number.isFinite(payload.price) || payload.price < 0) { setError("Enter a valid food price."); return; }
+      if (menuEditingId) await api.patch(`/api/menu-items/${menuEditingId}`, payload);
+      else await api.post("/api/menu-items", payload);
+      setMessage(menuEditingId ? "Food item updated." : "Food item added.");
+      setMenuEditingId(null);
+      setMenuForm({ category_id: categories[0]?.id || "", name: "", description: "", price: "", destination: "kitchen", is_available: true });
+      await load();
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || "Could not save food item.");
+    }
+  };
+
+  const editMenuItem = (item: MenuItem) => {
+    setMenuEditingId(item.id);
+    setMenuForm({ category_id: item.category_id, name: item.name, description: item.description || "", price: String(item.price), destination: item.destination, is_available: item.is_available });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const deleteMenuItem = async (item: MenuItem) => {
+    if (!window.confirm(`Delete "${item.name}" from the food menu? Historical sales will be preserved.`)) return;
+    try {
+      await api.delete(`/api/menu-items/${item.id}`);
+      setMessage(`"${item.name}" removed from the active menu.`);
+      await load();
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || "Could not delete food item.");
+    }
+  };
+
+  const downloadFoodMenu = async () => {
+    try {
+      const response = await api.get("/api/menu-items/export.pdf", { responseType: "blob" });
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "royal-skye-food-menu.pdf";
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || "Could not download food menu.");
     }
   };
 
@@ -226,6 +283,24 @@ export default function Admin() {
       </section>
 
       {(message || error) && <div className="rounded-lg bg-white p-4 shadow-sm">{message && <p className="text-sm text-green-700">{message}</p>}{error && <p className="text-sm text-red-600">{error}</p>}</div>}
+
+      <section className="bg-white rounded-xl shadow p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div><h2 className="font-semibold">{t("Food menu")}</h2><p className="text-sm text-neutral-500 mt-1">{t("Add and manage dishes, prices, categories and kitchen/bar routing.")}</p></div>
+          <button type="button" onClick={downloadFoodMenu} className="rounded-lg border border-brand px-4 py-2 text-sm font-medium text-brand">{t("Download food menu PDF")}</button>
+        </div>
+        <form onSubmit={saveMenuItem} className="grid gap-3 md:grid-cols-2">
+          <label className="text-sm">{t("Food name")}<input required maxLength={128} className="mt-1 w-full border rounded-lg px-3 py-2" value={menuForm.name} onChange={(e) => setMenuForm({ ...menuForm, name: e.target.value })} /></label>
+          <label className="text-sm">{t("Category")}<select required className="mt-1 w-full border rounded-lg px-3 py-2" value={menuForm.category_id} onChange={(e) => setMenuForm({ ...menuForm, category_id: e.target.value })}><option value="">{t("Select category")}</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+          <label className="text-sm">{t("Price (NPR)")}<input required type="number" min="0" step="0.01" className="mt-1 w-full border rounded-lg px-3 py-2" value={menuForm.price} onChange={(e) => setMenuForm({ ...menuForm, price: e.target.value })} /></label>
+          <label className="text-sm">{t("Send order to")}<select className="mt-1 w-full border rounded-lg px-3 py-2" value={menuForm.destination} onChange={(e) => setMenuForm({ ...menuForm, destination: e.target.value })}><option value="kitchen">{t("Kitchen")}</option><option value="bar">{t("Bar")}</option></select></label>
+          <label className="text-sm md:col-span-2">{t("Description")}<textarea className="mt-1 w-full border rounded-lg px-3 py-2" rows={2} value={menuForm.description} onChange={(e) => setMenuForm({ ...menuForm, description: e.target.value })} /></label>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={menuForm.is_available} onChange={(e) => setMenuForm({ ...menuForm, is_available: e.target.checked })} />{t("Available for POS orders")}</label>
+          <div className="flex gap-2 md:col-span-2"><button type="submit" className="bg-brand text-white rounded-lg px-4 py-2 font-medium">{menuEditingId ? t("Save changes") : t("Add food item")}</button>{menuEditingId && <button type="button" onClick={() => { setMenuEditingId(null); setMenuForm({ category_id: categories[0]?.id || "", name: "", description: "", price: "", destination: "kitchen", is_available: true }); }} className="border rounded-lg px-4 py-2">{t("Cancel")}</button>}</div>
+          {categories.length === 0 && <p className="text-sm text-red-700 md:col-span-2">{t("Add a category first, then you can add dishes.")}</p>}
+        </form>
+        <div className="mt-5 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2">{t("Food")}</th><th>{t("Category")}</th><th>{t("Price")}</th><th>{t("Send order to")}</th><th>{t("Status")}</th><th>{t("Actions")}</th></tr></thead><tbody>{menuItems.map((item) => <tr key={item.id} className="border-b last:border-0"><td className="py-2"><div className="font-medium">{item.name}</div>{item.description && <div className="text-xs text-neutral-500">{item.description}</div>}</td><td>{categories.find((category) => category.id === item.category_id)?.name || "—"}</td><td>Rs. {Number(item.price).toFixed(2)}</td><td className="capitalize">{t(item.destination)}</td><td>{item.is_available ? t("Available") : t("Unavailable")}</td><td><div className="flex gap-3"><button type="button" onClick={() => editMenuItem(item)} className="text-brand">{t("Edit")}</button><button type="button" onClick={() => deleteMenuItem(item)} className="text-red-700">{t("Delete")}</button></div></td></tr>)}</tbody></table>{menuItems.length === 0 && <p className="py-4 text-sm text-neutral-500">{t("No food items yet. Add your first dish above.")}</p>}</div>
+      </section>
 
       <section className="bg-white rounded-xl shadow p-5">
         <h2 className="font-semibold mb-3">{t("Customer records")}</h2>
