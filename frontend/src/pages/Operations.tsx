@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api, apiErrorMessage } from "../api/client";
 import { useLanguage } from "../context/LanguageContext";
 
@@ -13,6 +14,11 @@ const today = () => new Date().toISOString().slice(0, 10);
 export default function Operations() {
   const { t } = useLanguage();
   const [tab, setTab] = useState<Tab>("inventory");
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    const requested = searchParams.get("tab") as Tab | null;
+    if (requested && tabs.includes(requested)) setTab(requested);
+  }, [searchParams]);
   const [data, setData] = useState<any>({ inventory: [], suppliers: [], purchases: [], recipes: [], expenses: [], staff: [], attendance: [], payroll: [], reservations: [], menuItems: [], tables: [] });
   const [report, setReport] = useState<any>(null);
   const [start, setStart] = useState(today().slice(0, 7) + "-01");
