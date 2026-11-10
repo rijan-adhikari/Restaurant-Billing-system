@@ -59,7 +59,7 @@ const translations: Record<string, string> = {
   "Refresh data": "विवरण ताजा गर्नुहोस्", "Working...": "काम हुँदैछ...", "Stock items": "स्टक सामान", "Low stock": "कम मौज्दात", "Suppliers": "आपूर्तिकर्ता", "Recipes": "रेसिपीहरू",
   "inventory": "मौज्दात", "suppliers": "आपूर्तिकर्ता", "purchases": "खरिद", "recipes": "रेसिपी", "expenses": "खर्च", "reports": "प्रतिवेदन", "staff": "कर्मचारी", "reservations": "टेबल बुकिङ",
   "Add stock item": "स्टक सामान थप्नुहोस्", "Enter the item, supplier, expiry, cost and stock quantity.": "सामान, आपूर्तिकर्ता, म्याद, लागत र मौज्दातको परिमाण भर्नुहोस्।",
-  "Supplier name": "आपूर्तिकर्ताको नाम", "Total cost (NPR)": "जम्मा लागत (रु.)",
+  "Supplier name": "आपूर्तिकर्ताको नाम", "Total cost (NPR)": "जम्मा लागत (रु.)", "Gram (g)": "ग्राम (g)", "Litre": "लिटर",
   "Enter a quantity greater than zero when total cost is provided.": "जम्मा लागत राख्दा परिमाण शून्यभन्दा बढी राख्नुहोस्।",
   "Item name": "सामानको नाम", "SKU": "सामान कोड (SKU)", "Unit": "एकाइ", "Opening quantity": "सुरुको परिमाण", "Reorder level": "फेरि मगाउनुपर्ने सीमा",
   "Average cost (NPR)": "औसत लागत (रु.)", "Preferred supplier": "प्राथमिक आपूर्तिकर्ता",  "Expiry date": "म्याद सकिने मिति",
