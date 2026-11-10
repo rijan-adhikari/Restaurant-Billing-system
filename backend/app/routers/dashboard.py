@@ -143,7 +143,7 @@ def daily_sales_details(report_date: date | None = None, db: Session = Depends(g
             "customer_name": customer.name if customer else (service["customer_name"] if service else "Walk-in"),
             "customer_phone": customer.phone if customer else (service["phone"] if service else None),
             "service_type": service["service_type"] if service else "dine_in",
-            "table_name": order.table.name if order and order.table else (service["service_type"].title() if service else ""),
+            "table_name": service["service_type"].title() if service else (order.table.name if order and order.table else ""),
             "grand_total": str(bill.grand_total), "amount_paid": str(bill.amount_paid),
             "outstanding_amount": str(bill.outstanding_amount),
             "items": [{**dict(item), "unit_price": str(item["unit_price"]), "total": str(item["total"])} for item in items],
