@@ -8,9 +8,9 @@ def money(value: Decimal) -> Decimal:
 
 def calculate_bill(subtotal: Decimal, discount_percent: Decimal, tax_enabled: bool,
                    tax_percent: Decimal, service_enabled: bool,
-                   service_percent: Decimal) -> dict[str, Decimal]:
-    if not discount_percent.is_finite() or not tax_percent.is_finite() or not service_percent.is_finite():
-        raise HTTPException(status_code=400, detail='Bill percentages must be finite numbers')
+                   service_percent: Decimal, fixed_discount: Decimal = Decimal('0')) -> dict[str, Decimal]:
+    if not discount_percent.is_finite() or not tax_percent.is_finite() or not service_percent.is_finite() or not fixed_discount.is_finite():
+        raise HTTPException(status_code=400, detail='Bill amounts and percentages must be finite numbers')
     if not subtotal.is_finite() or subtotal < 0:
         raise HTTPException(status_code=400, detail='Subtotal must be a non-negative finite amount')
     if discount_percent < 0 or discount_percent > 100:
@@ -18,7 +18,12 @@ def calculate_bill(subtotal: Decimal, discount_percent: Decimal, tax_enabled: bo
     if tax_percent < 0 or service_percent < 0:
         raise HTTPException(status_code=400, detail='Tax and service charge percentages cannot be negative')
     subtotal = money(subtotal)
-    discount = money(subtotal * discount_percent / Decimal('100'))
+    if fixed_discount < 0:
+        raise HTTPException(status_code=400, detail='Fixed discount cannot be negative')
+    percentage_discount = money(subtotal * discount_percent / Decimal('100'))
+    discount = money(percentage_discount + fixed_discount)
+    if discount > subtotal:
+        raise HTTPException(status_code=400, detail='Total discount cannot exceed the subtotal')
     taxable_subtotal = money(subtotal - discount)
     tax = money(taxable_subtotal * tax_percent / Decimal('100')) if tax_enabled else Decimal('0.00')
     service = money(taxable_subtotal * service_percent / Decimal('100')) if service_enabled else Decimal('0.00')
