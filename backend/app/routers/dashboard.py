@@ -1,6 +1,8 @@
 from datetime import date, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
+from io import BytesIO
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -116,3 +118,84 @@ def clear_sales(db: Session = Depends(get_db), user=Depends(require_roles(models
     db.query(models.DiningTable).update({models.DiningTable.status: models.TableStatus.available}, synchronize_session=False)
     db.commit()
     return {"ok": True, "deleted_bills": deleted_bills}
+
+
+@router.get("/daily-sales")
+def daily_sales_details(report_date: date | None = None, db: Session = Depends(get_db),
+                        user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager, models.RoleName.cashier))):
+    target = report_date or datetime.utcnow().date()
+    bills = db.query(models.Bill).filter(
+        func.date(models.Bill.created_at) == target
+    ).order_by(models.Bill.created_at.desc()).all()
+    result = []
+    for bill in bills:
+        order = db.query(models.Order).filter(models.Order.id == bill.order_id).first()
+        customer = db.query(models.Customer).filter(models.Customer.id == bill.customer_id).first() if bill.customer_id else None
+        service = db.execute(text("SELECT service_type,customer_name,phone FROM order_service_details WHERE order_id=:id"),
+                             {"id": bill.order_id}).mappings().first()
+        items = db.execute(text("""SELECT mi.name,oi.quantity,oi.unit_price,
+            (oi.quantity * oi.unit_price) total
+            FROM order_items oi JOIN menu_items mi ON mi.id=oi.menu_item_id
+            WHERE oi.order_id=:order_id AND oi.is_cancelled=FALSE
+            ORDER BY mi.name"""), {"order_id": bill.order_id}).mappings().all()
+        result.append({
+            "id": bill.id, "bill_number": bill.bill_number, "created_at": bill.created_at,
+            "customer_name": customer.name if customer else (service["customer_name"] if service else "Walk-in"),
+            "customer_phone": customer.phone if customer else (service["phone"] if service else None),
+            "service_type": service["service_type"] if service else "dine_in",
+            "table_name": order.table.name if order and order.table else (service["service_type"].title() if service else ""),
+            "grand_total": str(bill.grand_total), "amount_paid": str(bill.amount_paid),
+            "outstanding_amount": str(bill.outstanding_amount),
+            "items": [{**dict(item), "unit_price": str(item["unit_price"]), "total": str(item["total"])} for item in items],
+        })
+    return result
+
+
+@router.get("/summary.pdf")
+def dashboard_summary_pdf(report_date: date | None = None, db: Session = Depends(get_db),
+                           user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager, models.RoleName.cashier))):
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+
+    target = report_date or datetime.utcnow().date()
+    summary = dashboard_summary(target, db, user)
+    sales = daily_sales_details(target, db, user)
+    output = BytesIO()
+    document = SimpleDocTemplate(output, pagesize=A4, title="Dashboard Report")
+    styles = getSampleStyleSheet()
+    story = [Paragraph("Royal Skye Birds · Dashboard Report", styles["Title"]),
+             Paragraph(f"Report date: {target.isoformat()}", styles["Normal"]), Spacer(1, 12)]
+    metrics = [
+        ["Metric", "Value"],
+        ["Daily sales", f"NPR {summary['daily_sales']}"],
+        ["Daily expenses", f"NPR {summary['daily_expenses']}"],
+        ["Estimated daily profit / loss", f"NPR {summary['daily_profit']}"],
+        ["Estimated daily COGS", f"NPR {summary['daily_estimated_cogs']}"],
+        ["Outstanding credit", f"NPR {summary['outstanding']}"],
+        ["Pending KOTs", str(summary["pending_kots"])],
+        ["Occupied tables", str(summary["occupied_tables"])],
+    ]
+    story.extend([Paragraph("Dashboard overview", styles["Heading2"]), Table(metrics, repeatRows=1), Spacer(1, 14),
+                  Paragraph("Daily sales detail", styles["Heading2"])])
+    rows = [["Bill", "Time", "Customer", "Items", "Total", "Paid"]]
+    for bill in sales:
+        item_text = ", ".join(f"{item['quantity']} x {item['name']}" for item in bill["items"])
+        rows.append([bill["bill_number"], bill["created_at"].strftime("%H:%M"), bill["customer_name"],
+                     item_text, f"NPR {bill['grand_total']}", f"NPR {bill['amount_paid']}"])
+    if len(rows) == 1:
+        rows.append(["—", "—", "No sales", "—", "—", "—"])
+    table = Table(rows, repeatRows=1, colWidths=[70, 42, 85, 145, 65, 65])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#5e1010")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#dddddd")),
+        ("FONTSIZE", (0, 0), (-1, -1), 7), ("PADDING", (0, 0), (-1, -1), 4),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    story.append(table)
+    document.build(story)
+    output.seek(0)
+    return StreamingResponse(output, media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=dashboard-{target.isoformat()}.pdf"})
