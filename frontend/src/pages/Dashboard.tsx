@@ -42,6 +42,9 @@ export default function Dashboard() {
   const [dailySales, setDailySales] = useState<any[]>([]);
   const [showDailySales, setShowDailySales] = useState(false);
   const [salesLoading, setSalesLoading] = useState(false);
+  const [monthlySales, setMonthlySales] = useState<any[]>([]);
+  const [showMonthlySales, setShowMonthlySales] = useState(false);
+  const [monthlySalesLoading, setMonthlySalesLoading] = useState(false);
 
   const load = () => api.get(`/api/dashboard/summary?report_date=${reportDate}`).then((response) => setSummary(response.data));
 
@@ -79,6 +82,19 @@ export default function Dashboard() {
     }
   };
 
+  const openMonthlySales = async () => {
+    setShowMonthlySales(true);
+    setMonthlySalesLoading(true);
+    try {
+      const response = await api.get(`/api/dashboard/monthly-sales?report_date=${reportDate}`);
+      setMonthlySales(response.data);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || "Could not load monthly sales details.");
+    } finally {
+      setMonthlySalesLoading(false);
+    }
+  };
+
   const downloadDashboardPdf = async () => {
     try {
       const response = await api.get(`/api/dashboard/summary.pdf?report_date=${reportDate}`, { responseType: "blob" });
@@ -108,7 +124,7 @@ export default function Dashboard() {
         <div className="flex flex-wrap items-end gap-2"><label className="text-sm">{t("Report date")}<input type="date" className="block border rounded-lg px-3 py-2 mt-1" value={reportDate} onChange={(e) => setReportDate(e.target.value)} /></label><button type="button" onClick={downloadDashboardPdf} className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">{t("Download dashboard PDF")}</button></div>
       </div>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
-        {cards.map(([label, value]) => label === t("Daily sales") ? <button type="button" key={label} onClick={openDailySales} className="rounded-2xl border border-neutral-200 bg-white p-4 text-left shadow-sm hover:border-brand md:p-5"><p className="text-sm text-neutral-500">{label} · {t("View details")}</p><p className="text-2xl font-semibold mt-1">Rs. {value}</p></button> : label === t("Daily expenses") ? <Link key={label} to="/operations?tab=expenses" className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm hover:border-brand md:p-5"><p className="text-sm text-neutral-500">{label} · {t("View details")}</p><p className="text-2xl font-semibold mt-1">Rs. {value}</p></Link> : <div key={label} className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm md:p-5"><p className="text-sm text-neutral-500">{label}</p><p className={`text-2xl font-semibold mt-1 ${label.toLowerCase().includes("profit") && Number(value) < 0 ? "text-red-700" : ""}`}>Rs. {value}</p></div>)}
+        {cards.map(([label, value]) => label === t("Daily sales") ? <button type="button" key={label} onClick={openDailySales} className="rounded-2xl border border-neutral-200 bg-white p-4 text-left shadow-sm hover:border-brand md:p-5"><p className="text-sm text-neutral-500">{label} · {t("View details")}</p><p className="text-2xl font-semibold mt-1">Rs. {value}</p></button> : label === t("Monthly sales") ? <button type="button" key={label} onClick={openMonthlySales} className="rounded-2xl border border-neutral-200 bg-white p-4 text-left shadow-sm hover:border-brand md:p-5"><p className="text-sm text-neutral-500">{label} · {t("View details")}</p><p className="text-2xl font-semibold mt-1">Rs. {value}</p></button> : label === t("Daily expenses") ? <Link key={label} to="/operations?tab=expenses" className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm hover:border-brand md:p-5"><p className="text-sm text-neutral-500">{label} · {t("View details")}</p><p className="text-2xl font-semibold mt-1">Rs. {value}</p></Link> : <div key={label} className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm md:p-5"><p className="text-sm text-neutral-500">{label}</p><p className={`text-2xl font-semibold mt-1 ${label.toLowerCase().includes("profit") && Number(value) < 0 ? "text-red-700" : ""}`}>Rs. {value}</p></div>)}
       </div>
       {(role === "admin" || role === "manager") && <div className="grid gap-3 sm:grid-cols-2">
         <Link to="/operations?tab=inventory" className="rounded-xl border bg-white p-4 shadow-sm hover:border-brand"><p className="font-semibold">{t("Inventory")}</p><p className="text-sm text-neutral-500">{t("Open stock register and manage stock levels")}</p></Link>
@@ -122,6 +138,12 @@ export default function Dashboard() {
       </section>}
       {message && <p className="text-sm text-green-700">{message}</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {showMonthlySales && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" onClick={() => setShowMonthlySales(false)}>
+        <section className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-semibold">{t("Monthly sales details")}</h2><p className="text-sm text-neutral-500">{reportDate.slice(0, 7)}</p></div><button type="button" onClick={() => setShowMonthlySales(false)} className="rounded-lg border px-3 py-2">{t("Close")}</button></div>
+          {monthlySalesLoading ? <p className="py-8 text-center">{t("Loading...")}</p> : monthlySales.length === 0 ? <p className="py-8 text-center text-sm text-neutral-500">{t("No sales recorded for this month.")}</p> : <div className="mt-4 space-y-4">{monthlySales.map((bill) => <article key={bill.id} className="rounded-xl border p-4"><div className="flex flex-wrap justify-between gap-2"><div><p className="font-semibold">{bill.bill_number} · {bill.customer_name}</p><p className="text-xs text-neutral-500">{bill.customer_phone || t("No phone")} · {bill.table_name} · {new Date(bill.created_at).toLocaleString()}</p></div><div className="text-right text-sm"><p className="font-semibold">Rs. {bill.grand_total}</p><p className="text-neutral-500">{t("Paid")}: Rs. {bill.amount_paid} · {t("Outstanding")}: Rs. {bill.outstanding_amount}</p></div></div><div className="mt-3 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2">{t("Food")}</th><th>{t("Quantity")}</th><th>{t("Price")}</th><th>{t("Total")}</th></tr></thead><tbody>{bill.items.map((item: any, index: number) => <tr key={index} className="border-b last:border-0"><td className="py-2">{item.name}</td><td>{item.quantity}</td><td>Rs. {item.unit_price}</td><td>Rs. {item.total}</td></tr>)}</tbody></table></div></article>)}</div>}
+        </section>
+      </div>}
       {showDailySales && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" onClick={() => setShowDailySales(false)}>
         <section className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-semibold">{t("Daily sales details")}</h2><p className="text-sm text-neutral-500">{reportDate}</p></div><button type="button" onClick={() => setShowDailySales(false)} className="rounded-lg border px-3 py-2">{t("Close")}</button></div>
