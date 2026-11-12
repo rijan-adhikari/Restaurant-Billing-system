@@ -238,7 +238,9 @@ def permanently_delete_sale(bill_id: str, db: Session = Depends(get_db),
     if not bill:
         raise HTTPException(404, "Sale not found")
     bill_id_value, order_id, bill_number = bill.id, bill.order_id, bill.bill_number
-    _reverse_bill_side_effects(db, bill, user.id)
+    # Voided sales already had stock, loyalty and credit effects reversed.
+    if bill.sale_status == "active":
+        _reverse_bill_side_effects(db, bill, user.id)
     db.execute(text("DELETE FROM bill_cost_snapshots WHERE bill_id=:bill"), {"bill": bill_id_value})
     db.execute(text("DELETE FROM bill_refunds WHERE bill_id=:bill"), {"bill": bill_id_value})
     db.execute(text("DELETE FROM loyalty_transactions WHERE bill_id=:bill"), {"bill": bill_id_value})
