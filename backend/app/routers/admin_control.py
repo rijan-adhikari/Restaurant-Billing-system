@@ -138,6 +138,10 @@ class RefundCreate(BaseModel):
     method: Literal["cash", "card", "bank_transfer", "qr"] = "cash"
 
 
+class SaleVoid(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
+
+
 class SupplierEntry(BaseModel):
     supplier_id: str
     entry_type: Literal["payment", "return", "adjustment"]
@@ -162,6 +166,93 @@ class LoyaltyAdjustment(BaseModel):
     notes: str = Field(min_length=3, max_length=500)
 
 
+def _reverse_bill_side_effects(db: Session, bill, user_id: str) -> None:
+    snapshots = db.execute(text("""SELECT inventory_item_id, SUM(quantity) quantity, MAX(unit_cost) unit_cost
+        FROM bill_cost_snapshots WHERE bill_id=:bill GROUP BY inventory_item_id"""),
+        {"bill": bill.id}).mappings().all()
+    for row in snapshots:
+        db.execute(text("UPDATE inventory_items SET quantity=quantity+:qty,updated_at=NOW() WHERE id=:id"),
+                   {"qty": row["quantity"], "id": row["inventory_item_id"]})
+        db.execute(text("""INSERT INTO stock_movements(item_id,movement_type,quantity,unit_cost,reference,notes,created_by)
+            VALUES(:item,'return',:qty,:cost,:reference,:notes,:user)"""),
+            {"item": row["inventory_item_id"], "qty": row["quantity"], "cost": row["unit_cost"],
+             "reference": bill.bill_number, "notes": "Stock restored for voided/deleted sale", "user": user_id})
+    loyalty_rows = db.execute(text("""SELECT customer_id,
+        COALESCE(SUM(CASE WHEN transaction_type='earn' THEN points ELSE 0 END),0) earned,
+        COALESCE(SUM(CASE WHEN transaction_type='redeem' THEN points ELSE 0 END),0) redeemed
+        FROM loyalty_transactions WHERE bill_id=:bill GROUP BY customer_id"""),
+        {"bill": bill.id}).mappings().all()
+    for row in loyalty_rows:
+        db.execute(text("""UPDATE loyalty_accounts SET
+            points_balance=GREATEST(0,points_balance-:earned+:redeemed),
+            lifetime_points=GREATEST(0,lifetime_points-:earned),updated_at=NOW()
+            WHERE customer_id=:customer"""),
+            {"earned": row["earned"], "redeemed": row["redeemed"], "customer": row["customer_id"]})
+    balance_ids = db.query(models.CustomerBalance.id).filter(models.CustomerBalance.bill_id == bill.id)
+    db.query(models.BalanceTransaction).filter(models.BalanceTransaction.customer_balance_id.in_(balance_ids)).delete(synchronize_session=False)
+    db.query(models.CustomerBalance).filter(models.CustomerBalance.bill_id == bill.id).delete(synchronize_session=False)
+    bill.outstanding_amount = 0
+
+
+@router.get("/sales")
+def list_sales(start: date | None = None, end: date | None = None,
+               db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
+    if start and end and end < start:
+        raise HTTPException(422, "End date must not precede start date")
+    rows = db.execute(text("""SELECT b.id,b.bill_number,b.business_date,b.created_at,b.grand_total,
+        b.amount_paid,b.outstanding_amount,b.sale_status,b.void_reason,
+        COALESCE(c.name,sd.customer_name,'Walk-in') customer_name,
+        COALESCE(sd.service_type,t.name,'') table_name
+        FROM bills b JOIN orders o ON o.id=b.order_id
+        LEFT JOIN customers c ON c.id=b.customer_id
+        LEFT JOIN order_service_details sd ON sd.order_id=o.id
+        LEFT JOIN tables t ON t.id=o.table_id
+        WHERE (:start IS NULL OR b.business_date>=:start)
+          AND (:end IS NULL OR b.business_date<=:end)
+        ORDER BY b.created_at DESC LIMIT 500"""), {"start": start, "end": end}).mappings().all()
+    return [dict(row) for row in rows]
+
+
+@router.patch("/sales/{bill_id}/void")
+def void_sale(bill_id: str, payload: SaleVoid, db: Session = Depends(get_db),
+              user=Depends(require_roles(*ADMIN))):
+    bill = db.query(models.Bill).filter(models.Bill.id == bill_id).with_for_update().first()
+    if not bill:
+        raise HTTPException(404, "Sale not found")
+    if bill.sale_status != "active":
+        raise HTTPException(409, "Only an active sale can be voided")
+    _reverse_bill_side_effects(db, bill, user.id)
+    bill.sale_status = "voided"
+    bill.voided_at = datetime.utcnow()
+    bill.voided_by = user.id
+    bill.void_reason = payload.reason
+    audit(db, user.id, "bill.void", f"Voided {bill.bill_number}: {payload.reason}")
+    db.commit()
+    return {"ok": True, "status": "voided"}
+
+
+@router.delete("/sales/{bill_id}")
+def permanently_delete_sale(bill_id: str, db: Session = Depends(get_db),
+                             user=Depends(require_roles(*ADMIN))):
+    bill = db.query(models.Bill).filter(models.Bill.id == bill_id).with_for_update().first()
+    if not bill:
+        raise HTTPException(404, "Sale not found")
+    bill_id_value, order_id, bill_number = bill.id, bill.order_id, bill.bill_number
+    _reverse_bill_side_effects(db, bill, user.id)
+    db.execute(text("DELETE FROM bill_cost_snapshots WHERE bill_id=:bill"), {"bill": bill_id_value})
+    db.execute(text("DELETE FROM bill_refunds WHERE bill_id=:bill"), {"bill": bill_id_value})
+    db.execute(text("DELETE FROM loyalty_transactions WHERE bill_id=:bill"), {"bill": bill_id_value})
+    db.query(models.Payment).filter(models.Payment.bill_id == bill_id_value).delete(synchronize_session=False)
+    db.query(models.Bill).filter(models.Bill.id == bill_id_value).delete(synchronize_session=False)
+    db.execute(text("DELETE FROM kot_items WHERE kot_id IN (SELECT id FROM kots WHERE order_id=:order)"), {"order": order_id})
+    db.execute(text("DELETE FROM kots WHERE order_id=:order"), {"order": order_id})
+    db.execute(text("DELETE FROM order_items WHERE order_id=:order"), {"order": order_id})
+    db.execute(text("DELETE FROM orders WHERE id=:order"), {"order": order_id})
+    audit(db, user.id, "bill.permanent_delete", f"Permanently deleted sale {bill_number}")
+    db.commit()
+    return {"ok": True, "status": "deleted"}
+
+
 def _report_data(start: date, end: date, db: Session):
     if end < start:
         raise HTTPException(422, "End date must not precede start date")
@@ -169,7 +260,7 @@ def _report_data(start: date, end: date, db: Session):
         COALESCE(SUM(b.subtotal),0) gross_sales, COALESCE(SUM(b.discount_amount),0) discounts,
         COALESCE(SUM(b.tax_amount),0) tax, COALESCE(SUM(b.service_charge_amount),0) service_charge,
         COALESCE(SUM(b.grand_total),0) billed_total, COALESCE(SUM(b.amount_paid),0) received
-        FROM bills b WHERE b.created_at::date BETWEEN :start AND :end"""),
+        FROM bills b WHERE b.business_date BETWEEN :start AND :end AND b.sale_status='active'"""),
         {"start": start, "end": end}).mappings().one()
     refunds = db.execute(text("""SELECT COALESCE(SUM(r.amount),0) FROM bill_refunds r
         JOIN bills b ON b.id=r.bill_id WHERE b.created_at::date BETWEEN :start AND :end"""),
