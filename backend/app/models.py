@@ -1,9 +1,9 @@
 import enum
 import uuid
-from datetime import datetime
+from datetime import datetime, date
 
 from sqlalchemy import (
-    Column, String, Integer, Boolean, ForeignKey, DateTime, Numeric,
+    Column, String, Integer, Boolean, ForeignKey, DateTime, Date, Numeric,
     Text, Enum, UniqueConstraint
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -126,6 +126,7 @@ class Order(Base):
     waiter_id = Column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False)
     status = Column(Enum(OrderStatus), default=OrderStatus.open, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    business_date = Column(Date, nullable=False, default=date.today)
     table = relationship("DiningTable", back_populates="orders")
     items = relationship("OrderItem", back_populates="order")
     kots = relationship("KOT", back_populates="order")
@@ -192,6 +193,11 @@ class Bill(Base):
     amount_paid = Column(Numeric(10, 2), nullable=False, default=0)
     outstanding_amount = Column(Numeric(10, 2), nullable=False, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
+    business_date = Column(Date, nullable=False, default=date.today)
+    sale_status = Column(String(16), nullable=False, default="active")
+    voided_at = Column(DateTime, nullable=True)
+    voided_by = Column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=True)
+    void_reason = Column(Text, default="")
     payments = relationship("Payment", back_populates="bill")
 
 
