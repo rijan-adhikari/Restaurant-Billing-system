@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 from typing import Optional, List, Literal
 
@@ -128,6 +128,7 @@ class OrderCreate(BaseModel):
     phone: Optional[str] = None
     delivery_address: Optional[str] = None
     delivery_fee: Decimal = Decimal("0")
+    business_date: Optional[date] = None
     items: List[OrderItemCreate]
 
 
