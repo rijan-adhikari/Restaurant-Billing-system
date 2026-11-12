@@ -1,6 +1,6 @@
 import random
 import string
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
@@ -59,9 +59,12 @@ async def create_order(payload: schemas.OrderCreate, db: Session = Depends(get_d
         ).first()
     if not order:
         order = models.Order(order_number=_next_number("ORD"), table_id=table.id,
-                              waiter_id=user.id, status=models.OrderStatus.open)
+                              waiter_id=user.id, status=models.OrderStatus.open,
+                              business_date=payload.business_date or date.today())
         db.add(order)
         db.flush()
+    else:
+        order.business_date = payload.business_date or order.business_date
         if service_type == "dine_in":
             table.status = models.TableStatus.occupied
         else:
@@ -127,6 +130,7 @@ def list_open_orders(db: Session = Depends(get_db),
                                 service_enabled, service_percent)
         result.append({
             "id": order.id,
+            "business_date": order.business_date.isoformat() if order.business_date else None,
             "table_id": order.table_id,
             "order_number": order.order_number,
             "table_name": service_details["service_type"].title() if service_details else (order.table.name if order.table else ""),
