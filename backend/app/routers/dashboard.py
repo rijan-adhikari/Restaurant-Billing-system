@@ -161,6 +161,40 @@ def daily_sales_details(report_date: date | None = None, db: Session = Depends(g
     return result
 
 
+@router.get("/monthly-sales")
+def monthly_sales_details(report_date: date | None = None, db: Session = Depends(get_db),
+                          user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager, models.RoleName.cashier))):
+    target = report_date or datetime.utcnow().date()
+    month_start = target.replace(day=1)
+    next_month = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+    bills = db.query(models.Bill).filter(
+        models.Bill.created_at >= datetime.combine(month_start, time.min),
+        models.Bill.created_at < datetime.combine(next_month, time.min),
+    ).order_by(models.Bill.created_at.desc()).all()
+    result = []
+    for bill in bills:
+        order = db.query(models.Order).filter(models.Order.id == bill.order_id).first()
+        customer = db.query(models.Customer).filter(models.Customer.id == bill.customer_id).first() if bill.customer_id else None
+        service = db.execute(text("SELECT service_type,customer_name,phone FROM order_service_details WHERE order_id=:id"),
+                             {"id": bill.order_id}).mappings().first()
+        items = db.execute(text("""SELECT mi.name,oi.quantity,oi.unit_price,
+            (oi.quantity * oi.unit_price) total
+            FROM order_items oi JOIN menu_items mi ON mi.id=oi.menu_item_id
+            WHERE oi.order_id=:order_id AND oi.is_cancelled=FALSE
+            ORDER BY mi.name"""), {"order_id": bill.order_id}).mappings().all()
+        result.append({
+            "id": bill.id, "bill_number": bill.bill_number, "created_at": bill.created_at,
+            "customer_name": customer.name if customer else (service["customer_name"] if service else "Walk-in"),
+            "customer_phone": customer.phone if customer else (service["phone"] if service else None),
+            "service_type": service["service_type"] if service else "dine_in",
+            "table_name": service["service_type"].title() if service else (order.table.name if order and order.table else ""),
+            "grand_total": str(bill.grand_total), "amount_paid": str(bill.amount_paid),
+            "outstanding_amount": str(bill.outstanding_amount),
+            "items": [{**dict(item), "unit_price": str(item["unit_price"]), "total": str(item["total"])} for item in items],
+        })
+    return result
+
+
 @router.get("/summary.pdf")
 def dashboard_summary_pdf(report_date: date | None = None, db: Session = Depends(get_db),
                            user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager, models.RoleName.cashier))):
