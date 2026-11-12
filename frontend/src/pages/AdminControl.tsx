@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { api, apiErrorMessage } from "../api/client";
 
-type Tab = "cash" | "refunds" | "suppliers" | "loyalty" | "reports" | "service" | "backup" | "audit" | "settings";
+type Tab = "cash" | "refunds" | "sales" | "suppliers" | "loyalty" | "reports" | "service" | "backup" | "audit" | "settings";
 const tabs: { id: Tab; label: string }[] = [
   { id: "cash", label: "Cash drawer" }, { id: "refunds", label: "Refunds" },
-  { id: "suppliers", label: "Supplier ledger" }, { id: "loyalty", label: "Loyalty" },
+  { id: "sales", label: "Manage sales" }, { id: "suppliers", label: "Supplier ledger" }, { id: "loyalty", label: "Loyalty" },
   { id: "reports", label: "Reports & exports" }, { id: "service", label: "Service orders" }, { id: "backup", label: "Backup & restore" },
   { id: "audit", label: "Audit trail" }, { id: "settings", label: "Business settings" },
 ];
@@ -38,7 +38,7 @@ export default function AdminControl() {
   const load = async () => {
     const requests = [
       ["current", "/api/admin/cash-shifts/current"], ["shifts", "/api/admin/cash-shifts"],
-      ["refunds", "/api/admin/refunds"], ["bills", "/api/admin/refundable-bills"],
+      ["refunds", "/api/admin/refunds"], ["bills", "/api/admin/refundable-bills"], ["sales", "/api/admin/sales"],
       ["suppliers", "/api/operations/suppliers"], ["inventory", "/api/operations/inventory"], ["ledger", "/api/admin/suppliers/ledger"], ["supplierBalances", "/api/admin/suppliers/balances"],
       ["loyalty", "/api/admin/loyalty/accounts"], ["loyaltySettings", "/api/admin/loyalty/settings"],
       ["audit", "/api/admin/audit"], ["serviceOrders", "/api/admin/service-orders"], ["customers", "/api/customers"], ["tax", "/api/settings/tax"], ["restaurant", "/api/settings/restaurant"],
@@ -96,6 +96,17 @@ export default function AdminControl() {
     e.preventDefault();
     run(() => api.post("/api/admin/loyalty/adjust", { ...adjustment, points: Number(adjustment.points) }), "Loyalty points adjusted.");
     setAdjustment({ customer_id: "", points: "", notes: "" });
+  };
+  const voidSale = async (sale: any) => {
+    const reason = window.prompt(`Reason for voiding ${sale.bill_number}:`);
+    if (!reason || reason.trim().length < 3) return;
+    if (!window.confirm(`Void ${sale.bill_number}? It will be excluded from reports and recipe stock / loyalty effects will be reversed.`)) return;
+    await run(() => api.patch(`/api/admin/sales/${sale.id}/void`, { reason: reason.trim() }), "Sale voided and excluded from reports.");
+  };
+  const permanentlyDeleteSale = async (sale: any) => {
+    if (!window.confirm(`PERMANENTLY DELETE ${sale.bill_number}? This cannot be undone.`)) return;
+    if (window.prompt(`Type DELETE ${sale.bill_number} to confirm:`) !== `DELETE ${sale.bill_number}`) return;
+    await run(() => api.delete(`/api/admin/sales/${sale.id}`), "Sale permanently deleted.");
   };
   const updateServiceOrder = async (orderId: string, status: string) => {
     await run(() => api.patch(`/api/admin/service-orders/${orderId}/status`, { status }), "Service order status updated.");
@@ -228,6 +239,14 @@ export default function AdminControl() {
       </form><p className="mt-3 text-xs text-amber-700">Refunds are capped at the bill's paid amount and recorded separately for traceability.</p></section>
       <section className={panel}><h2 className="font-semibold text-lg mb-3">Refund history</h2><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Date</th><th>Bill</th><th>Reason</th><th>Method</th><th>Amount</th><th>By</th></tr></thead><tbody>{data.refunds.map((r: any) => <tr key={r.id} className="border-b"><td className="py-2">{new Date(r.created_at).toLocaleString()}</td><td>{r.bill_number}</td><td>{r.reason}</td><td className="capitalize">{r.method}</td><td>{money(r.amount)}</td><td>{r.refunded_by}</td></tr>)}</tbody></table></div></section>
     </div>}
+
+    {tab === "sales" && <section className={panel}>
+      <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-semibold text-lg">Manage individual sales</h2><p className="text-sm text-neutral-500">Void a sale to retain its audit record, or permanently delete it.</p></div><button className="rounded-lg border px-3 py-2 text-sm" onClick={() => load().catch(() => setError("Could not refresh sales."))}>Refresh</button></div>
+      <div className="mt-4 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Bill / customer</th><th>Business date</th><th>Created</th><th>Table / service</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+        {(data.sales || []).map((s: any) => <tr key={s.id} className="border-b align-top"><td className="py-2"><span className="font-semibold">{s.bill_number}</span><p className="text-xs text-neutral-500">{s.customer_name}</p></td><td>{s.business_date}</td><td className="whitespace-nowrap">{new Date(s.created_at).toLocaleString()}</td><td>{s.table_name}</td><td>{money(s.grand_total)}</td><td><span className={s.sale_status === "voided" ? "rounded-full bg-amber-100 px-2 py-1 text-xs text-amber-800" : "rounded-full bg-emerald-100 px-2 py-1 text-xs text-emerald-800"}>{s.sale_status}{s.void_reason ? <span className="block max-w-40 text-xs">{s.void_reason}</span> : null}</span></td><td><div className="flex flex-wrap gap-2">{s.sale_status === "active" && <button disabled={busy} onClick={() => voidSale(s)} className="rounded-lg border border-amber-500 px-2 py-1 text-xs font-semibold text-amber-700">Void</button>}<button disabled={busy} onClick={() => permanentlyDeleteSale(s)} className="rounded-lg bg-red-700 px-2 py-1 text-xs font-semibold text-white">Permanently delete</button></div></td></tr>)}
+        {(data.sales || []).length === 0 && <tr><td colSpan={7} className="py-6 text-center text-neutral-400">No sales found.</td></tr>}
+      </tbody></table></div>
+    </section>}
 
     {tab === "suppliers" && <div className="grid gap-4 lg:grid-cols-2">
       <section className={panel}><h2 className="font-semibold text-lg mb-3">Supplier payment / credit adjustment</h2><form onSubmit={addSupplierEntry} className="space-y-3">
