@@ -110,6 +110,7 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
         subtotal=subtotal, tax_amount=tax_amount, service_charge_amount=service_amount,
         discount_amount=discount_amount, grand_total=grand_total,
         amount_paid=total_paid, outstanding_amount=grand_total - total_paid,
+        business_date=order.business_date,
     )
     db.add(bill)
     db.flush()
