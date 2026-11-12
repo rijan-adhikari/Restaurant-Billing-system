@@ -37,7 +37,8 @@ def dashboard_summary(report_date: date | None = None, db: Session = Depends(get
     def net_sales(start: datetime, end: datetime):
         return db.query(func.coalesce(func.sum(
             models.Bill.grand_total - models.Bill.tax_amount - models.Bill.service_charge_amount
-        ), 0)).filter(models.Bill.created_at >= start, models.Bill.created_at < end).scalar()
+        ), 0)).filter(models.Bill.business_date >= start.date(), models.Bill.business_date < end.date(),
+                      models.Bill.sale_status == "active").scalar()
 
     def estimated_cogs(start: datetime, end: datetime):
         value = db.execute(text("""SELECT COALESCE(SUM(ri.quantity * oi.quantity * i.average_cost /
@@ -47,7 +48,8 @@ def dashboard_summary(report_date: date | None = None, db: Session = Depends(get
             JOIN recipes r ON r.menu_item_id=oi.menu_item_id
             JOIN recipe_items ri ON ri.recipe_id=r.id
             JOIN inventory_items i ON i.id=ri.item_id
-            WHERE b.created_at >= :start AND b.created_at < :end"""),
+            WHERE b.business_date >= CAST(:start AS DATE) AND b.business_date < CAST(:end AS DATE)
+              AND b.sale_status='active'"""),
             {"start": start, "end": end}).scalar_one()
         return value or 0
 
@@ -135,7 +137,7 @@ def daily_sales_details(report_date: date | None = None, db: Session = Depends(g
                         user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager, models.RoleName.cashier))):
     target = report_date or datetime.utcnow().date()
     bills = db.query(models.Bill).filter(
-        func.date(models.Bill.created_at) == target
+        models.Bill.business_date == target, models.Bill.sale_status == "active"
     ).order_by(models.Bill.created_at.desc()).all()
     result = []
     for bill in bills:
@@ -168,8 +170,8 @@ def monthly_sales_details(report_date: date | None = None, db: Session = Depends
     month_start = target.replace(day=1)
     next_month = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
     bills = db.query(models.Bill).filter(
-        models.Bill.created_at >= datetime.combine(month_start, time.min),
-        models.Bill.created_at < datetime.combine(next_month, time.min),
+        models.Bill.business_date >= month_start,
+        models.Bill.business_date < next_month, models.Bill.sale_status == "active",
     ).order_by(models.Bill.created_at.desc()).all()
     result = []
     for bill in bills:
