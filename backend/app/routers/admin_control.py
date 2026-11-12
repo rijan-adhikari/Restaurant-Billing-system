@@ -263,23 +263,23 @@ def _report_data(start: date, end: date, db: Session):
         FROM bills b WHERE b.business_date BETWEEN :start AND :end AND b.sale_status='active'"""),
         {"start": start, "end": end}).mappings().one()
     refunds = db.execute(text("""SELECT COALESCE(SUM(r.amount),0) FROM bill_refunds r
-        JOIN bills b ON b.id=r.bill_id WHERE b.created_at::date BETWEEN :start AND :end"""),
+        JOIN bills b ON b.id=r.bill_id WHERE b.business_date BETWEEN :start AND :end AND b.sale_status='active'"""),
         {"start": start, "end": end}).scalar_one()
     payments = db.execute(text("""SELECT p.method,COALESCE(SUM(p.amount),0) amount,COUNT(*) transactions
         FROM payments p JOIN bills b ON b.id=p.bill_id
-        WHERE b.created_at::date BETWEEN :start AND :end GROUP BY p.method ORDER BY p.method"""),
+        WHERE b.business_date BETWEEN :start AND :end AND b.sale_status='active' GROUP BY p.method ORDER BY p.method"""),
         {"start": start, "end": end}).mappings().all()
     items = db.execute(text("""SELECT m.name,SUM(oi.quantity) quantity,
         SUM(oi.quantity*oi.unit_price) gross_amount
         FROM bills b JOIN orders o ON o.id=b.order_id
         JOIN order_items oi ON oi.order_id=o.id AND oi.is_cancelled=FALSE
         JOIN menu_items m ON m.id=oi.menu_item_id
-        WHERE b.created_at::date BETWEEN :start AND :end
+        WHERE b.business_date BETWEEN :start AND :end AND b.sale_status='active'
         GROUP BY m.name ORDER BY quantity DESC"""), {"start": start, "end": end}).mappings().all()
     staff = db.execute(text("""SELECT u.full_name,COUNT(b.id) bills,
         COALESCE(SUM(b.grand_total),0) billed_total,COALESCE(SUM(b.amount_paid),0) received
         FROM bills b JOIN orders o ON o.id=b.order_id JOIN users u ON u.id=o.waiter_id
-        WHERE b.created_at::date BETWEEN :start AND :end
+        WHERE b.business_date BETWEEN :start AND :end AND b.sale_status='active'
         GROUP BY u.id,u.full_name ORDER BY billed_total DESC"""),
         {"start": start, "end": end}).mappings().all()
     return summary, Decimal(str(refunds)), payments, items, staff
@@ -514,7 +514,7 @@ def refundable_bills(db: Session = Depends(get_db), user=Depends(require_roles(*
     rows = db.execute(text("""SELECT b.id,b.bill_number,b.created_at,b.grand_total,b.amount_paid,
         b.amount_paid-COALESCE(SUM(r.amount),0) refundable_amount
         FROM bills b LEFT JOIN bill_refunds r ON r.bill_id=b.id
-        GROUP BY b.id HAVING b.amount_paid-COALESCE(SUM(r.amount),0)>0
+        GROUP BY b.id HAVING b.sale_status='active' AND b.amount_paid-COALESCE(SUM(r.amount),0)>0
         ORDER BY b.created_at DESC LIMIT 300""")).mappings().all()
     return [dict(row) for row in rows]
 
