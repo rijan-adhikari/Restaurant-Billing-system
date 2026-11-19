@@ -108,7 +108,12 @@ export default function Billing() {
       return;
     }
     const subtotal = Number(selectedOrder.subtotal);
-    const percentDiscountAmount = roundMoney(subtotal * percent / 100);
+    const taxRate = Number(selectedOrder.tax_percent || 0);
+    const serviceRate = Number(selectedOrder.service_charge_percent || 0);
+    const taxAmount = roundMoney(subtotal * taxRate / 100);
+    const serviceAmount = roundMoney(subtotal * serviceRate / 100);
+    const grossTotal = roundMoney(subtotal + taxAmount + serviceAmount);
+    const percentDiscountAmount = roundMoney(grossTotal * percent / 100);
     const fixedDiscountAmount = Number(discountAmount || 0);
     if (!Number.isFinite(fixedDiscountAmount) || fixedDiscountAmount < 0) {
       setError("Enter a valid fixed discount amount.");
@@ -121,22 +126,22 @@ export default function Billing() {
     }
     const loyaltyDiscount = roundMoney(points * pointValue);
     const totalDiscountAmount = roundMoney(percentDiscountAmount + fixedDiscountAmount + loyaltyDiscount);
-    if (totalDiscountAmount > subtotal) {
-      setError("Discounts and loyalty redemption cannot exceed the bill subtotal.");
+    if (totalDiscountAmount > grossTotal) {
+      setError("Discounts and loyalty redemption cannot exceed the bill total.");
       return;
     }
-    const taxableSubtotal = roundMoney(subtotal - totalDiscountAmount);
-    const taxAmount = roundMoney(taxableSubtotal * Number(selectedOrder.tax_percent || 0) / 100);
-    const serviceAmount = roundMoney(taxableSubtotal * Number(selectedOrder.service_charge_percent || 0) / 100);
-    const grandTotal = roundMoney(taxableSubtotal + taxAmount + serviceAmount);
-    const amountReceived = method === "credit" ? 0 : Number(amount || 0);
+    const grandTotal = roundMoney(grossTotal - totalDiscountAmount);
+    let amountReceived = method === "credit" ? 0 : Number(amount || 0);
     if (!Number.isFinite(amountReceived) || amountReceived < 0) {
       setError("Enter a valid amount received.");
       return;
     }
+    // When a pre-discount amount is still in the payment field, automatically
+    // adjust non-cash tenders to the discounted bill total instead of treating
+    // the stale amount as an attempted QR overpayment.
     if (amountReceived > grandTotal && method !== "cash") {
-      setError("Overpayment/change is supported for cash payments only.");
-      return;
+      amountReceived = grandTotal;
+      setAmount(grandTotal.toFixed(2));
     }
     const remainingCredit = Math.max(0, grandTotal - amountReceived);
     const changeDue = Math.max(0, amountReceived - grandTotal);
