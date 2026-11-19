@@ -91,6 +91,20 @@ export default function AdminControl() {
     if (!shift || !window.confirm(`Delete this ${entry.entry_type.replace("_", " ")} record for ${money(entry.amount)}? This will change the shift expected cash.`)) return;
     run(() => api.delete(`/api/admin/cash-shifts/${shift.id}/entries/${entry.id}`), "Cash movement deleted.");
   };
+  const correctClosedCashEntry = async (entry: any, shiftId: string) => {
+    const amount = window.prompt("Correct cash movement amount (NPR):", String(entry.amount));
+    if (amount === null) return;
+    const parsed = Number(amount);
+    if (!Number.isFinite(parsed) || parsed <= 0) { setError("Enter a valid amount greater than zero."); return; }
+    const reference = window.prompt("Reference:", entry.reference || ""); if (reference === null) return;
+    const notes = window.prompt("Notes:", entry.notes || ""); if (notes === null) return;
+    await run(() => api.patch(`/api/admin/cash-shifts/${shiftId}/entries/${entry.id}/closed-correction`, { entry_type: entry.entry_type, amount: parsed, reference, notes }), "Closed shift cash movement corrected and reconciliation recalculated.");
+  };
+  const deleteClosedCashEntry = async (entry: any, shiftId: string) => {
+    if (!window.confirm(`Delete the ${entry.entry_type.replace("_"," ")} record for ${money(entry.amount)} from this closed shift? Reconciliation will be recalculated and the action audited.`)) return;
+    await run(() => api.delete(`/api/admin/cash-shifts/${shiftId}/entries/${entry.id}/closed-correction`), "Closed shift cash movement deleted and reconciliation recalculated.");
+  };
+
   const createRefund = (e: React.FormEvent) => {
     e.preventDefault();
     run(() => api.post("/api/admin/refunds", { ...refund, amount: Number(refund.amount) }), "Refund recorded.");
@@ -260,7 +274,7 @@ export default function AdminControl() {
           </tbody></table></div>
           <p className="mt-2 text-xs text-neutral-500">Sale and refund records are system-generated and cannot be edited or deleted here.</p>
         </div>}
-        <h2 className="font-semibold text-lg mb-3">Recent shift reconciliation</h2><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Opened</th><th>Staff</th><th>Status</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead><tbody>{data.shifts.map((s: any) => <tr key={s.id} className="border-b"><td className="py-2">{new Date(s.opened_at).toLocaleString()}</td><td>{s.opened_by_name}</td><td className="capitalize">{s.status}</td><td>{s.expected_cash == null ? "—" : money(s.expected_cash)}</td><td>{s.counted_cash == null ? "—" : money(s.counted_cash)}</td><td className={Number(s.cash_difference) < 0 ? "text-red-700" : "text-emerald-700"}>{s.cash_difference == null ? "—" : money(s.cash_difference)}</td></tr>)}</tbody></table></div></section>
+        <h2 className="font-semibold text-lg mb-3">Recent shift reconciliation</h2><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Opened</th><th>Staff</th><th>Status</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead><tbody>{data.shifts.map((s: any) => <React.Fragment key={s.id}><tr className="border-b"><td className="py-2">{new Date(s.opened_at).toLocaleString()}</td><td>{s.opened_by_name}</td><td className="capitalize">{s.status}</td><td>{s.expected_cash == null ? "—" : money(s.expected_cash)}</td><td>{s.counted_cash == null ? "—" : money(s.counted_cash)}</td><td className={Number(s.cash_difference) < 0 ? "text-red-700" : "text-emerald-700"}>{s.cash_difference == null ? "—" : money(s.cash_difference)}</td></tr>{(s.cash_entries || []).length > 0 && <tr className="border-b bg-neutral-50"><td colSpan={6} className="p-3"><p className="mb-2 text-xs font-semibold">Cash movements · {s.status === "closed" ? "Manager corrections" : "History"}</p>{s.cash_entries.map((entry: any) => <div key={entry.id} className="flex flex-wrap items-center justify-between gap-2 border-b py-2 text-xs"><span>{new Date(entry.created_at).toLocaleString()} · <b className="capitalize">{entry.entry_type.replace("_"," ")}</b> · {money(entry.amount)} · {entry.reference || entry.notes || "No reference"}</span>{s.status === "closed" && ["cash_in","cash_out","payout"].includes(entry.entry_type) && <span className="flex gap-2"><button type="button" disabled={busy} onClick={() => correctClosedCashEntry(entry,s.id)} className="rounded border px-2 py-1 font-semibold">Edit</button><button type="button" disabled={busy} onClick={() => deleteClosedCashEntry(entry,s.id)} className="rounded bg-red-700 px-2 py-1 font-semibold text-white">Delete</button></span>}</div>)}</td></tr>}</React.Fragment>)}</tbody></table></div></section>
     </div>}
 
     {tab === "refunds" && <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
