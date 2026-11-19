@@ -75,7 +75,7 @@ async def create_order(payload: schemas.OrderCreate, db: Session = Depends(get_d
                  "fee": payload.delivery_fee if service_type == "delivery" else Decimal("0")})
 
     is_cabin_order = service_type == "dine_in" and "cabin" in (table.name or "").lower()
-    kitchen_items, bar_items = [], []
+    kitchen_items = []
     for line in payload.items:
         menu_item = db.query(models.MenuItem).filter(models.MenuItem.id == line.menu_item_id).first()
         if not menu_item:
@@ -87,11 +87,9 @@ async def create_order(payload: schemas.OrderCreate, db: Session = Depends(get_d
                                        quantity=line.quantity, unit_price=unit_price, notes=line.notes)
         db.add(order_item)
         db.flush()
-        target = kitchen_items if menu_item.destination == models.RouteDestination.kitchen else bar_items
-        target.append((order_item, line.quantity, line.notes))
+        kitchen_items.append((order_item, line.quantity, line.notes))
 
-    for station, lines in ((models.RouteDestination.kitchen, kitchen_items),
-                            (models.RouteDestination.bar, bar_items)):
+    for station, lines in ((models.RouteDestination.kitchen, kitchen_items),):
         if not lines:
             continue
         kot = models.KOT(kot_number=_next_number("KOT"), order_id=order.id, station=station,
