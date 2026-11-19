@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { api, apiErrorMessage } from "../api/client";
 
-type Tab = "cash" | "refunds" | "sales" | "suppliers" | "loyalty" | "reports" | "service" | "backup" | "audit" | "settings";
-type AdminControlProps = { visibleTabs?: Tab[]; embedded?: boolean };
+type Tab = "cash" | "sales" | "suppliers" | "reports" | "service" | "backup" | "audit" | "settings";
+type AdminControlProps = { visibleTabs?: Tab[]; embedded?: boolean; managerView?: boolean };
 const tabs: { id: Tab; label: string }[] = [
-  { id: "cash", label: "Cash drawer" }, { id: "refunds", label: "Refunds" },
-  { id: "sales", label: "Manage sales" }, { id: "suppliers", label: "Supplier ledger" }, { id: "loyalty", label: "Loyalty" },
+  { id: "cash", label: "Cash drawer" },
+  { id: "sales", label: "Manage sales" }, { id: "suppliers", label: "Supplier ledger" },
   { id: "reports", label: "Reports & exports" }, { id: "service", label: "Service orders" }, { id: "backup", label: "Backup & restore" },
   { id: "audit", label: "Audit trail" }, { id: "settings", label: "Business settings" },
 ];
@@ -14,9 +14,10 @@ const primary = "rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white 
 const panel = "rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm";
 const money = (v: any) => "Rs. " + Number(v || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function AdminControl({ visibleTabs, embedded = false }: AdminControlProps) {
-  const availableTabs = visibleTabs ?? tabs.filter((item) => item.id !== "cash" && item.id !== "loyalty").map((item) => item.id);
-  const [tab, setTab] = useState<Tab>(availableTabs[0] ?? "refunds");
+export default function AdminControl({ visibleTabs, embedded = false, managerView = false }: AdminControlProps) {
+  const roleTabs = managerView ? tabs.filter((item) => ["cash", "suppliers", "service"].includes(item.id)) : tabs;
+  const availableTabs = visibleTabs ?? roleTabs.map((item) => item.id);
+  const [tab, setTab] = useState<Tab>(availableTabs[0] ?? "cash");
   const [data, setData] = useState<any>({ shifts: [], refunds: [], bills: [], suppliers: [], inventory: [], ledger: [], supplierBalances: [], loyalty: [], serviceOrders: [], audit: [] });
   const [shift, setShift] = useState<any>(null);
   const [tax, setTax] = useState<any>({ tax_enabled: true, tax_percent: "14", service_charge_enabled: false, service_charge_percent: "0" });
@@ -42,10 +43,10 @@ export default function AdminControl({ visibleTabs, embedded = false }: AdminCon
   const load = async () => {
     const requests = [
       ["current", "/api/admin/cash-shifts/current"], ["shifts", "/api/admin/cash-shifts"],
-      ["refunds", "/api/admin/refunds"], ["bills", "/api/admin/refundable-bills"], ["sales", "/api/admin/sales"],
+      ...(!managerView ? ([["sales", "/api/admin/sales"]] as [string, string][]) : []),
       ["suppliers", "/api/operations/suppliers"], ["inventory", "/api/operations/inventory"], ["ledger", "/api/admin/suppliers/ledger"], ["supplierBalances", "/api/admin/suppliers/balances"],
-      ["loyalty", "/api/admin/loyalty/accounts"], ["loyaltySettings", "/api/admin/loyalty/settings"],
-      ["audit", "/api/admin/audit"], ["serviceOrders", "/api/admin/service-orders"], ["customers", "/api/customers"], ["tax", "/api/settings/tax"], ["restaurant", "/api/settings/restaurant"],
+      ["serviceOrders", "/api/admin/service-orders"],
+      ...(!managerView ? ([["audit", "/api/admin/audit"], ["tax", "/api/settings/tax"], ["restaurant", "/api/settings/restaurant"]] as [string, string][]) : []),
     ] as const;
     const results = await Promise.allSettled(requests.map(([, url]) => api.get(url)));
     const next: any = {};
@@ -54,13 +55,12 @@ export default function AdminControl({ visibleTabs, embedded = false }: AdminCon
     });
     setShift(next.current ?? null);
     setData((old: any) => ({ ...old, ...next }));
-    if (next.loyaltySettings) setLoyalty(next.loyaltySettings);
     if (next.tax) setTax(next.tax);
     if (next.restaurant) setRestaurant(next.restaurant);
   };
 
   useEffect(() => { load().catch(() => setError("Could not load administration data.")); }, []);
-  useEffect(() => { if (!availableTabs.includes(tab)) setTab(availableTabs[0] ?? "refunds"); }, [availableTabs.join(","), tab]);
+  useEffect(() => { if (!availableTabs.includes(tab)) setTab(availableTabs[0] ?? "cash"); }, [availableTabs.join(","), tab]);
 
   const run = async (action: () => Promise<any>, success: string) => {
     setBusy(true); setError(""); setMessage("");
@@ -120,11 +120,6 @@ export default function AdminControl({ visibleTabs, embedded = false }: AdminCon
     await run(() => api.delete(`/api/admin/cash-shifts/${shiftId}/entries/${entry.id}/closed-correction`), "Closed shift cash movement deleted and reconciliation recalculated.");
   };
 
-  const createRefund = (e: React.FormEvent) => {
-    e.preventDefault();
-    run(() => api.post("/api/admin/refunds", { ...refund, amount: Number(refund.amount) }), "Refund recorded.");
-    setRefund({ bill_id: "", amount: "", reason: "", method: "cash" });
-  };
   const addSupplierEntry = (e: React.FormEvent) => {
     e.preventDefault();
     run(() => api.post("/api/admin/suppliers/ledger", { ...supplierEntry, amount: Number(supplierEntry.amount) }), "Supplier ledger entry saved.");
@@ -136,11 +131,6 @@ export default function AdminControl({ visibleTabs, embedded = false }: AdminCon
       ...supplierReturn, quantity: Number(supplierReturn.quantity), unit_cost: Number(supplierReturn.unit_cost),
     }), "Supplier return posted; stock and supplier ledger updated.");
     setSupplierReturn({ supplier_id: "", item_id: "", quantity: "", unit_cost: "", reference: "", notes: "" });
-  };
-  const adjustPoints = (e: React.FormEvent) => {
-    e.preventDefault();
-    run(() => api.post("/api/admin/loyalty/adjust", { ...adjustment, points: Number(adjustment.points) }), "Loyalty points adjusted.");
-    setAdjustment({ customer_id: "", points: "", notes: "" });
   };
   const voidSale = async (sale: any) => {
     const reason = window.prompt(`Reason for voiding ${sale.bill_number}:`);
@@ -219,19 +209,16 @@ export default function AdminControl({ visibleTabs, embedded = false }: AdminCon
     }
     const taxPercent = Number(tax.tax_percent);
     const servicePercent = Number(tax.service_charge_percent);
-    const spendPerPoint = Number(loyalty.spend_per_point);
-    const pointValue = Number(loyalty.point_value);
     if (![taxPercent, servicePercent, spendPerPoint, pointValue].every(Number.isFinite)
         || taxPercent < 0 || taxPercent > 100 || servicePercent < 0 || servicePercent > 100
-        || spendPerPoint <= 0 || pointValue < 0) {
-      setError("Check tax and service charge (0–100%), spend per point (>0), and point value (0 or more).");
+) {
+      setError("Check tax and service charge (0–100%).");
       return;
     }
     setBusy(true); setError(""); setMessage("");
     const steps: [string, () => Promise<any>][] = [
       ["Restaurant profile", () => api.put("/api/settings/restaurant", restaurant)],
       ["Tax and service charge", () => api.put("/api/settings/tax", { ...tax, tax_percent: taxPercent, service_charge_percent: servicePercent })],
-      ["Loyalty rules", () => api.put("/api/admin/loyalty/settings", { ...loyalty, spend_per_point: spendPerPoint, point_value: pointValue })],
     ];
     try {
       for (const [label, save] of steps) {
@@ -249,7 +236,7 @@ export default function AdminControl({ visibleTabs, embedded = false }: AdminCon
 
   return <div className="mx-auto max-w-7xl space-y-5">
     <header className="flex flex-wrap items-end justify-between gap-3">
-      <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">Royal Skye · {embedded ? "Restaurant Operations" : "Administration"}</p><h1 className="mt-1 text-3xl font-bold">{embedded ? (tab === "cash" ? "Cash drawer" : "Loyalty points") : "Control centre"}</h1><p className="text-sm text-neutral-500">{embedded ? "Operational cash and customer points management." : "Financial controls, business configuration and accountability."}</p></div>
+      <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">Royal Skye · {embedded ? "Restaurant Operations" : "Administration"}</p><h1 className="mt-1 text-3xl font-bold">{embedded ? (tab === "cash" ? "Cash drawer" : "Restaurant controls") : "Control centre"}</h1><p className="text-sm text-neutral-500">{embedded ? "Restaurant administration and operational controls." : "Financial controls, business configuration and accountability."}</p></div>
       <button className={primary} disabled={busy} onClick={() => load()}>{busy ? "Working…" : "Refresh"}</button>
     </header>
     {message && <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p>}
@@ -292,17 +279,6 @@ export default function AdminControl({ visibleTabs, embedded = false }: AdminCon
         <h2 className="font-semibold text-lg mb-3">Recent shift reconciliation</h2><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Opened</th><th>Staff</th><th>Status</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead><tbody>{data.shifts.map((s: any) => <React.Fragment key={s.id}><tr className="border-b"><td className="py-2">{new Date(s.opened_at).toLocaleString()}</td><td>{s.opened_by_name}</td><td className="capitalize">{s.status}</td><td>{s.expected_cash == null ? "—" : money(s.expected_cash)}</td><td>{s.counted_cash == null ? "—" : money(s.counted_cash)}</td><td className={Number(s.cash_difference) < 0 ? "text-red-700" : "text-emerald-700"}>{s.cash_difference == null ? "—" : money(s.cash_difference)}</td></tr>{(s.cash_entries || []).length > 0 && <tr className="border-b bg-neutral-50"><td colSpan={6} className="p-3"><p className="mb-2 text-xs font-semibold">Cash movements · {s.status === "closed" ? "Manager corrections" : "History"}</p>{s.cash_entries.map((entry: any) => <div key={entry.id} className="flex flex-wrap items-center justify-between gap-2 border-b py-2 text-xs"><span>{new Date(entry.created_at).toLocaleString()} · <b className="capitalize">{entry.entry_type.replace("_"," ")}</b> · {money(entry.amount)} · {entry.reference || entry.notes || "No reference"}</span>{s.status === "closed" && <span className="flex gap-2">{["cash_in","cash_out","payout"].includes(entry.entry_type) && <><button type="button" disabled={busy} onClick={() => correctClosedCashEntry(entry,s.id)} className="rounded border px-2 py-1 font-semibold">Edit</button><button type="button" disabled={busy} onClick={() => deleteClosedCashEntry(entry,s.id)} className="rounded bg-red-700 px-2 py-1 font-semibold text-white">Delete</button></>}{["sale","refund"].includes(entry.entry_type) && <button type="button" disabled={busy} onClick={() => deleteCashEntry(entry,s.id)} className="rounded bg-red-700 px-2 py-1 font-semibold text-white">Delete</button>}</span>}</div>)}</td></tr>}</React.Fragment>)}</tbody></table></div></section>
     </div>}
 
-    {tab === "refunds" && <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
-      <section className={panel}><h2 className="font-semibold text-lg mb-3">Record a refund</h2><form className="space-y-3" onSubmit={createRefund}>
-        <label className="block text-xs">Bill<select required className={field + " mt-1"} value={refund.bill_id} onChange={e => setRefund({ ...refund, bill_id: e.target.value })}><option value="">Choose refundable bill</option>{data.bills.map((b: any) => <option key={b.id} value={b.id}>{b.bill_number} · paid {money(b.amount_paid)} · refundable {money(b.refundable_amount)}</option>)}</select></label>
-        <input required type="number" min="0.01" step="0.01" className={field} placeholder="Refund amount (NPR)" value={refund.amount} onChange={e => setRefund({ ...refund, amount: e.target.value })} />
-        <label className="block text-xs">Refund method<select className={field + " mt-1"} value={refund.method} onChange={e => setRefund({ ...refund, method: e.target.value })}><option value="cash">Cash</option><option value="card">Card</option><option value="bank_transfer">Bank transfer</option><option value="qr">QR</option></select></label>
-        <textarea required minLength={3} className={field} rows={3} placeholder="Reason for refund (required)" value={refund.reason} onChange={e => setRefund({ ...refund, reason: e.target.value })} />
-        <button className={primary} disabled={busy}>Save refund</button>
-      </form><p className="mt-3 text-xs text-amber-700">Refunds are capped at the bill's paid amount and recorded separately for traceability.</p></section>
-      <section className={panel}><h2 className="font-semibold text-lg mb-3">Refund history</h2><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Date</th><th>Bill</th><th>Reason</th><th>Method</th><th>Amount</th><th>By</th></tr></thead><tbody>{data.refunds.map((r: any) => <tr key={r.id} className="border-b"><td className="py-2">{new Date(r.created_at).toLocaleString()}</td><td>{r.bill_number}</td><td>{r.reason}</td><td className="capitalize">{r.method}</td><td>{money(r.amount)}</td><td>{r.refunded_by}</td></tr>)}</tbody></table></div></section>
-    </div>}
-
     {tab === "sales" && <section className={panel}>
       <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-semibold text-lg">Manage individual sales</h2><p className="text-sm text-neutral-500">Void a sale to retain its audit record, or permanently delete its bill and order. Cash-drawer entries remain for reconciliation; record a refund separately if money was returned.</p></div><button className="rounded-lg border px-3 py-2 text-sm" onClick={() => load().catch(() => setError("Could not refresh sales."))}>Refresh</button></div>
       <div className="mt-4 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Bill / customer</th><th>Business date</th><th>Created</th><th>Table / service</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead><tbody>
@@ -329,16 +305,6 @@ export default function AdminControl({ visibleTabs, embedded = false }: AdminCon
         <button className={primary} disabled={busy}>Return stock & update ledger</button>
       </form><p className="mt-3 text-xs text-amber-700">The system checks on-hand quantity, deducts returned stock and records the supplier credit in one transaction.</p></section>
       <section className={panel}><h2 className="font-semibold text-lg mb-3">Supplier balances</h2><div className="mb-4 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Supplier</th><th>Phone</th><th>Outstanding payable</th></tr></thead><tbody>{data.supplierBalances.map((b: any) => <tr key={b.id} className="border-b"><td className="py-2">{b.name}</td><td>{b.phone || "—"}</td><td className={Number(b.balance) > 0 ? "font-semibold text-amber-700" : "text-emerald-700"}>{money(b.balance)}</td></tr>)}</tbody></table></div><h3 className="font-semibold mb-3">Ledger history</h3><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Date</th><th>Supplier</th><th>Type</th><th>Reference</th><th>Amount</th></tr></thead><tbody>{data.ledger.map((l: any) => <tr key={l.id} className="border-b"><td className="py-2">{new Date(l.created_at).toLocaleString()}</td><td>{l.supplier_name}</td><td className="capitalize">{l.entry_type}</td><td>{l.reference || "—"}</td><td>{money(l.amount)}</td></tr>)}</tbody></table></div></section>
-    </div>}
-
-    {tab === "loyalty" && <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
-      <section className={panel}><h2 className="font-semibold text-lg mb-3">Manual points adjustment</h2><form onSubmit={adjustPoints} className="space-y-3">
-        <label className="block text-xs">Customer<select required className={field + " mt-1"} value={adjustment.customer_id} onChange={e => setAdjustment({ ...adjustment, customer_id: e.target.value })}><option value="">Choose customer</option>{(data.customers || []).map((c: any) => <option key={c.id} value={c.id}>{c.name} {c.phone || ""}</option>)}</select></label>
-        <input required type="number" step="1" className={field} placeholder="Points (+/-)" value={adjustment.points} onChange={e => setAdjustment({ ...adjustment, points: e.target.value })} />
-        <textarea required minLength={3} className={field} rows={2} placeholder="Reason" value={adjustment.notes} onChange={e => setAdjustment({ ...adjustment, notes: e.target.value })} />
-        <button className={primary} disabled={busy}>Adjust points</button>
-      </form></section>
-      <section className={panel}><h2 className="font-semibold text-lg mb-3">Customer rewards balances</h2><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Customer</th><th>Phone</th><th>Available points</th><th>Lifetime points</th></tr></thead><tbody>{data.loyalty.map((a: any) => <tr key={a.id} className="border-b"><td className="py-2">{a.name}</td><td>{a.phone || "—"}</td><td className="font-semibold">{a.points_balance}</td><td>{a.lifetime_points}</td></tr>)}</tbody></table></div></section>
     </div>}
 
     {tab === "reports" && <section className={panel}>
