@@ -99,17 +99,6 @@ export default function Admin() {
     }
   };
 
-  const removeAllDishes = async () => {
-    if (!window.confirm(t("Remove every dish from the POS menu? Categories and past order history will be kept."))) return;
-    try {
-      const response = await api.delete("/api/menu-items");
-      setMessage(t("All dishes have been removed. Categories are still available.") + ` ${response.data?.removed ?? 0} removed, ${response.data?.archived ?? 0} historical items hidden.`);
-      await load();
-    } catch (e: any) {
-      setError(e?.response?.data?.detail || "Could not remove dishes.");
-    }
-  };
-
   const saveMenuItem = async (event: React.FormEvent) => {
     event.preventDefault();
     setError("");
@@ -284,7 +273,7 @@ export default function Admin() {
             <h2 className="font-semibold">{t("Categories")}</h2>
             <p className="text-sm text-neutral-500 mt-1">{t("Keep your categories ready. Dishes can be added later when needed.")}</p>
           </div>
-          <button type="button" onClick={removeAllDishes} className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50">{t("Remove all dishes")}</button>
+          
         </div>
         <div className="flex flex-wrap gap-2">
           <input className="min-w-0 flex-1 border rounded-lg px-3 py-2" placeholder={t("New category name")} value={categoryName} onChange={(e) => setCategoryName(e.target.value)} />
