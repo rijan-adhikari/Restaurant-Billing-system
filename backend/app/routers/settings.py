@@ -70,7 +70,7 @@ def update_tax_setting(payload: schemas.TaxSettingUpdate, db: Session = Depends(
 
 
 @router.get("/settings/restaurant")
-def get_restaurant_setting(db: Session = Depends(get_db), user=Depends(get_current_user)):
+def get_restaurant_setting(db: Session = Depends(get_db), user=Depends(require_roles(models.RoleName.admin))):
     r = db.query(models.RestaurantSetting).first()
     if not r:
         r = models.RestaurantSetting()
@@ -86,7 +86,7 @@ def get_restaurant_setting(db: Session = Depends(get_db), user=Depends(get_curre
 
 @router.put("/settings/restaurant")
 def update_restaurant_setting(payload: RestaurantSettingsUpdate, db: Session = Depends(get_db),
-                              user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager))):
+                              user=Depends(require_roles(models.RoleName.admin))):
     setting = db.query(models.RestaurantSetting).first()
     if not setting:
         setting = models.RestaurantSetting()
