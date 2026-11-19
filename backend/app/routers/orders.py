@@ -173,6 +173,8 @@ async def merge_orders(payload: schemas.OrderMerge, db: Session = Depends(get_db
         raise HTTPException(status_code=409, detail="Only open orders can be merged")
     if any(order.table_id is None or order.table is None for order in orders):
         raise HTTPException(status_code=400, detail="Only dine-in table orders can be merged")
+    if len({order.table_id for order in orders}) != len(orders):
+        raise HTTPException(status_code=400, detail="Select different tables for merging")
 
     for order in orders:
         service = db.execute(text("SELECT service_type FROM order_service_details WHERE order_id=:id"),
@@ -182,6 +184,8 @@ async def merge_orders(payload: schemas.OrderMerge, db: Session = Depends(get_db
         if db.query(models.Bill).filter(models.Bill.order_id == order.id).first():
             raise HTTPException(status_code=409, detail="A selected order already has a bill")
 
+    orders_by_id = {order.id: order for order in orders}
+    orders = [orders_by_id[order_id] for order_id in order_ids]
     primary = orders[0]
     source_orders = orders[1:]
     source_names = [order.table.name for order in orders]
