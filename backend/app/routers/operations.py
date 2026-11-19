@@ -131,6 +131,12 @@ class PayrollCreate(BaseModel):
     notes: str | None = None
 
 
+class PayrollCashout(BaseModel):
+    amount: Decimal = Field(gt=0)
+    payment_date: date = Field(default_factory=date.today)
+    notes: str | None = None
+
+
 class ReservationCreate(BaseModel):
     customer_name: str
     phone: str | None = None
