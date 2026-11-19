@@ -368,7 +368,7 @@ def create_detailed_expense(payload: ExpenseCreate, db: Session = Depends(get_db
 @router.get("/reports/profit-loss")
 def profit_loss(start: date = Query(default_factory=lambda: date.today().replace(day=1)),
                 end: date = Query(default_factory=date.today), db: Session = Depends(get_db),
-                user=Depends(require_roles(*MANAGERS))):
+                user=Depends(require_roles(*ADMIN))):
     if end < start:
         raise HTTPException(422, "End date must not be before start date")
     sales = db.execute(text("""SELECT COALESCE(SUM(grand_total),0) total,
@@ -419,7 +419,7 @@ def profit_loss(start: date = Query(default_factory=lambda: date.today().replace
 
 
 @router.get("/reports/stock")
-def stock_report(db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+def stock_report(db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     rows = db.execute(text("""SELECT name,category,unit,quantity,reorder_level,average_cost,
         quantity*average_cost stock_value,(quantity<=reorder_level) low_stock,expiry_date
         FROM inventory_items WHERE is_active=TRUE ORDER BY category,name""")).mappings().all()
@@ -428,7 +428,7 @@ def stock_report(db: Session = Depends(get_db), user=Depends(require_roles(*MANA
 
 
 @router.get("/reports/stock.csv")
-def stock_csv(db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+def stock_csv(db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     rows = db.execute(text("SELECT name,sku,category,unit,quantity,reorder_level,average_cost,quantity*average_cost stock_value FROM inventory_items WHERE is_active=TRUE ORDER BY name")).mappings().all()
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=["name","sku","category","unit","quantity","reorder_level","average_cost","stock_value"])
