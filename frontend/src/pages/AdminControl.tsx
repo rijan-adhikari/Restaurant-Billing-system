@@ -15,7 +15,7 @@ const panel = "rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm";
 const money = (v: any) => "Rs. " + Number(v || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function AdminControl({ visibleTabs, embedded = false, managerView = false }: AdminControlProps) {
-  const roleTabs = managerView ? tabs.filter((item) => ["cash", "suppliers", "service"].includes(item.id)) : tabs;
+  const roleTabs = managerView ? tabs.filter((item) => ["suppliers", "service"].includes(item.id)) : tabs.filter((item) => item.id !== "cash");
   const availableTabs = visibleTabs ?? roleTabs.map((item) => item.id);
   const [tab, setTab] = useState<Tab>(availableTabs[0] ?? "cash");
   const [data, setData] = useState<any>({ shifts: [], refunds: [], bills: [], suppliers: [], inventory: [], ledger: [], supplierBalances: [], loyalty: [], serviceOrders: [], audit: [] });
