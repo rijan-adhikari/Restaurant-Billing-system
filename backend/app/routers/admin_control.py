@@ -217,11 +217,7 @@ def list_sales(start: date | None = None, end: date | None = None,
         WHERE (:start IS NULL OR b.business_date>=:start)
           AND (:end IS NULL OR b.business_date<=:end)
         ORDER BY b.created_at DESC LIMIT 500"""), {"start": start, "end": end}).mappings().all()
-    result = []
-    for row in rows:
-        entries = db.execute(text("""SELECT e.id,e.entry_type,e.amount,e.reference,e.notes,e.created_at,u.full_name created_by_name FROM cash_drawer_entries e JOIN users u ON u.id=e.created_by WHERE e.shift_id=:id ORDER BY e.created_at DESC"""), {"id": row["id"]}).mappings().all()
-        result.append(dict(row) | {"cash_entries": [dict(entry) for entry in entries]})
-    return result
+    return [dict(row) for row in rows]
 
 
 @router.patch("/sales/{bill_id}/void")
