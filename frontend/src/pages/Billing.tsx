@@ -36,6 +36,7 @@ export default function Billing() {
     ]);
     setOrders(orderResponse.data);
     setCustomers(customerResponse.data);
+    return orderResponse.data as OpenOrder[];
     setLoyaltyEnabled(!!loyaltyResponse.data.enabled);
     setPointValue(Number(loyaltyResponse.data.point_value || 0));
   };
@@ -76,9 +77,10 @@ export default function Billing() {
         .filter((order) => mergeOrderIds.includes(order.id))
         .reduce((total, order) => total + Number(order.grand_total || 0), 0);
       await api.post("/api/orders/merge", { order_ids: mergeOrderIds });
-      await loadData();
+      const refreshedOrders = await loadData();
+      const mergedOrder = refreshedOrders.find((order) => order.id === primaryOrderId);
       setOrderId(primaryOrderId);
-      setAmount(method === "credit" ? "0" : roundMoney(combinedAmount).toFixed(2));
+      setAmount(method === "credit" ? "0" : (mergedOrder?.grand_total || roundMoney(combinedAmount).toFixed(2)));
       setMergeOrderIds([]);
       setPreview(null);
       setResult(null);
