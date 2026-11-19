@@ -354,8 +354,8 @@ def create_detailed_expense(payload: ExpenseCreate, db: Session = Depends(get_db
     if payload.payment_status not in {"paid", "unpaid", "partial"}:
         raise HTTPException(422, "Invalid payment status")
     row = db.execute(text("""INSERT INTO expenses(id,category,description,amount,expense_date,created_by,department,
-        payment_status,supplier_id,receipt_reference,notes)
-        VALUES(:id,:category,:description,:amount,:date,:user,:department,:status,:supplier,:receipt,:notes) RETURNING *"""),
+        payment_status,supplier_id,receipt_reference,notes,created_at)
+        VALUES(:id,:category,:description,:amount,:date,:user,:department,:status,:supplier,:receipt,:notes,NOW()) RETURNING *"""),
         {"id": uuid.uuid4(), "category": payload.category, "description": payload.description, "amount": payload.amount,
          "date": payload.expense_date or datetime.utcnow(), "user": user.id, "department": payload.department,
          "status": payload.payment_status, "supplier": payload.supplier_id,
