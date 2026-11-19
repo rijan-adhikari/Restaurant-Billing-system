@@ -465,9 +465,34 @@ def clock_out(attendance_id: str, db: Session = Depends(get_db), user=Depends(re
     return dict(row)
 
 
+def _ensure_payroll_payments_table(db: Session):
+    db.execute(text("""CREATE TABLE IF NOT EXISTS payroll_payments (
+        id BIGSERIAL PRIMARY KEY,
+        payroll_id UUID NOT NULL REFERENCES payroll_entries(id) ON DELETE CASCADE,
+        amount NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+        payment_date DATE NOT NULL DEFAULT CURRENT_DATE,
+        notes TEXT,
+        created_by UUID NOT NULL REFERENCES users(id),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )"""))
+    db.commit()
+
+
 @router.get("/staff/payroll")
 def list_payroll(db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
-    rows = db.execute(text("""SELECT p.*,u.full_name FROM payroll_entries p JOIN users u ON u.id=p.user_id
+    _ensure_payroll_payments_table(db)
+    rows = db.execute(text("""SELECT p.*,u.full_name,
+        COALESCE(pay.total_paid, CASE WHEN p.paid_at IS NOT NULL THEN p.gross_pay-p.deductions ELSE 0 END) total_paid,
+        GREATEST(p.gross_pay-p.deductions-COALESCE(pay.total_paid,
+            CASE WHEN p.paid_at IS NOT NULL THEN p.gross_pay-p.deductions ELSE 0 END),0) remaining_balance,
+        COALESCE(pay.payments,'[]'::json) payments
+        FROM payroll_entries p JOIN users u ON u.id=p.user_id
+        LEFT JOIN LATERAL (
+            SELECT SUM(amount) total_paid,
+                json_agg(json_build_object('id',id,'amount',amount,'payment_date',payment_date,'notes',notes,'created_at',created_at)
+                    ORDER BY payment_date DESC, id DESC) payments
+            FROM payroll_payments WHERE payroll_id=p.id
+        ) pay ON TRUE
         ORDER BY p.period_end DESC LIMIT 300""")).mappings().all()
     return [dict(r) for r in rows]
 
