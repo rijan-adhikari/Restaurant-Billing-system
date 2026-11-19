@@ -20,13 +20,14 @@ def calculate_bill(subtotal: Decimal, discount_percent: Decimal, tax_enabled: bo
     subtotal = money(subtotal)
     if fixed_discount < 0:
         raise HTTPException(status_code=400, detail='Fixed discount cannot be negative')
-    percentage_discount = money(subtotal * discount_percent / Decimal('100'))
+    # Tax and service charge are calculated on the pre-discount subtotal.
+    tax = money(subtotal * tax_percent / Decimal('100')) if tax_enabled else Decimal('0.00')
+    service = money(subtotal * service_percent / Decimal('100')) if service_enabled else Decimal('0.00')
+    gross_total = money(subtotal + tax + service)
+    percentage_discount = money(gross_total * discount_percent / Decimal('100'))
     discount = money(percentage_discount + fixed_discount)
-    if discount > subtotal:
-        raise HTTPException(status_code=400, detail='Total discount cannot exceed the subtotal')
-    taxable_subtotal = money(subtotal - discount)
-    tax = money(taxable_subtotal * tax_percent / Decimal('100')) if tax_enabled else Decimal('0.00')
-    service = money(taxable_subtotal * service_percent / Decimal('100')) if service_enabled else Decimal('0.00')
-    total = money(taxable_subtotal + tax + service)
-    return {'subtotal': subtotal, 'discount_amount': discount, 'taxable_subtotal': taxable_subtotal,
+    if discount > gross_total:
+        raise HTTPException(status_code=400, detail='Total discount cannot exceed the bill total')
+    total = money(gross_total - discount)
+    return {'subtotal': subtotal, 'discount_amount': discount, 'taxable_subtotal': subtotal,
             'tax_amount': tax, 'service_charge_amount': service, 'grand_total': total}
