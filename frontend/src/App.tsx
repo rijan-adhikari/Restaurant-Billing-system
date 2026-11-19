@@ -12,6 +12,7 @@ const Admin = lazy(() => import("./pages/Admin"));
 const Credit = lazy(() => import("./pages/Credit"));
 const Operations = lazy(() => import("./pages/Operations"));
 const AdminControl = lazy(() => import("./pages/AdminControl"));
+const DailySavings = lazy(() => import("./pages/DailySavings"));
 
 function Shell({ children }: { children: React.ReactNode }) {
   const { fullName, role, logout } = useAuth();
@@ -25,7 +26,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/billing", label: t("Billing") }] : []),
     ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/credit", label: t("Credit") }] : []),
     ...(["admin", "manager"].includes(role || "") ? [{ to: "/operations", label: t("Restaurant Operations") }] : []),
-    ...(role === "admin" ? [{ to: "/admin", label: t("Master Panel") }, { to: "/admin-control", label: t("Control Centre") }] : []),
+    ...(role === "admin" ? [{ to: "/admin", label: t("Master Panel") }, { to: "/admin-control", label: t("Control Centre") }, { to: "/daily-savings", label: t("Daily savings") }] : []),
   ];
 
   return (
@@ -132,6 +133,7 @@ export default function App() {
           </ProtectedRoute>
         }
       />
+      <Route path="/daily-savings" element={<ProtectedRoute allowedRoles={["admin","manager"]}><Shell><DailySavings /></Shell></ProtectedRoute>} />
       <Route path="*" element={<Navigate to={token ? "/dashboard" : "/login"} />} />
     </Routes></Suspense>
   );
