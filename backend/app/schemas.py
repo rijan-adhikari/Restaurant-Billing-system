@@ -126,6 +126,10 @@ class OrderItemCreate(BaseModel):
     notes: str = ""
 
 
+class OrderMerge(BaseModel):
+    order_ids: List[str]
+
+
 class OrderCreate(BaseModel):
     table_id: Optional[str] = None
     service_type: Literal["dine_in", "takeaway", "delivery"] = "dine_in"
