@@ -18,6 +18,7 @@ from app.database import get_db
 from app.deps import require_roles
 
 router = APIRouter(prefix="/api/operations", tags=["restaurant operations"])
+ADMIN = (models.RoleName.admin,)
 MANAGERS = (models.RoleName.admin, models.RoleName.manager)
 UNITS = {"kg": ("weight", Decimal("1000")), "g": ("weight", Decimal("1")),
          "litre": ("volume", Decimal("1000")), "ml": ("volume", Decimal("1")),
@@ -439,14 +440,14 @@ def stock_csv(db: Session = Depends(get_db), user=Depends(require_roles(*MANAGER
 
 
 @router.get("/staff/attendance")
-def attendance(db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+def attendance(db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     rows = db.execute(text("""SELECT a.*,u.full_name,u.username FROM staff_attendance a JOIN users u ON u.id=a.user_id
         ORDER BY a.clock_in DESC LIMIT 300""")).mappings().all()
     return [dict(r) for r in rows]
 
 
 @router.post("/staff/clock-in")
-def clock_in(payload: AttendanceCreate, db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+def clock_in(payload: AttendanceCreate, db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     active = db.execute(text("SELECT id FROM staff_attendance WHERE user_id=:id AND clock_out IS NULL"), {"id": payload.user_id}).first()
     if active:
         raise HTTPException(409, "Staff member already has an open shift")
@@ -457,7 +458,7 @@ def clock_in(payload: AttendanceCreate, db: Session = Depends(get_db), user=Depe
 
 
 @router.post("/staff/{attendance_id}/clock-out")
-def clock_out(attendance_id: str, db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+def clock_out(attendance_id: str, db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     row = db.execute(text("UPDATE staff_attendance SET clock_out=NOW() WHERE id=:id AND clock_out IS NULL RETURNING *"),
                      {"id": attendance_id}).mappings().first()
     if not row:
@@ -480,7 +481,7 @@ def _ensure_payroll_payments_table(db: Session):
 
 
 @router.get("/staff/payroll")
-def list_payroll(db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+def list_payroll(db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     _ensure_payroll_payments_table(db)
     rows = db.execute(text("""SELECT p.*,u.full_name,
         COALESCE(pay.total_paid, CASE WHEN p.paid_at IS NOT NULL THEN p.gross_pay-p.deductions ELSE 0 END) total_paid,
@@ -499,7 +500,7 @@ def list_payroll(db: Session = Depends(get_db), user=Depends(require_roles(*MANA
 
 
 @router.post("/staff/payroll")
-def create_payroll(payload: PayrollCreate, db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+def create_payroll(payload: PayrollCreate, db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     if payload.period_end < payload.period_start or payload.deductions > payload.gross_pay:
         raise HTTPException(422, "Invalid payroll period or deductions")
     row = db.execute(text("""INSERT INTO payroll_entries(user_id,period_start,period_end,gross_pay,deductions,notes)
@@ -512,7 +513,7 @@ def create_payroll(payload: PayrollCreate, db: Session = Depends(get_db), user=D
 
 @router.post("/staff/payroll/{payroll_id}/cashout")
 def cashout_payroll(payroll_id: str, payload: PayrollCashout, db: Session = Depends(get_db),
-                    user=Depends(require_roles(*MANAGERS))):
+                    user=Depends(require_roles(*ADMIN))):
     _ensure_payroll_payments_table(db)
     payroll = db.execute(text("SELECT * FROM payroll_entries WHERE id=:id FOR UPDATE"), {"id": payroll_id}).mappings().first()
     if not payroll:
@@ -535,7 +536,7 @@ def cashout_payroll(payroll_id: str, payload: PayrollCashout, db: Session = Depe
 
 
 @router.delete("/staff/payroll/{payroll_id}")
-def delete_payroll(payroll_id: str, db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+def delete_payroll(payroll_id: str, db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     _ensure_payroll_payments_table(db)
     exists = db.execute(text("SELECT id FROM payroll_entries WHERE id=:id FOR UPDATE"), {"id": payroll_id}).first()
     if not exists:
@@ -549,7 +550,7 @@ def delete_payroll(payroll_id: str, db: Session = Depends(get_db), user=Depends(
 
 
 @router.post("/staff/payroll/{payroll_id}/pay")
-def mark_payroll_paid(payroll_id: str, db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+def mark_payroll_paid(payroll_id: str, db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     _ensure_payroll_payments_table(db)
     payroll = db.execute(text("SELECT * FROM payroll_entries WHERE id=:id FOR UPDATE"), {"id": payroll_id}).mappings().first()
     if not payroll:
