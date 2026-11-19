@@ -217,7 +217,11 @@ def list_sales(start: date | None = None, end: date | None = None,
         WHERE (:start IS NULL OR b.business_date>=:start)
           AND (:end IS NULL OR b.business_date<=:end)
         ORDER BY b.created_at DESC LIMIT 500"""), {"start": start, "end": end}).mappings().all()
-    return [dict(row) for row in rows]
+    result = []
+    for row in rows:
+        entries = db.execute(text("""SELECT e.id,e.entry_type,e.amount,e.reference,e.notes,e.created_at,u.full_name created_by_name FROM cash_drawer_entries e JOIN users u ON u.id=e.created_by WHERE e.shift_id=:id ORDER BY e.created_at DESC"""), {"id": row["id"]}).mappings().all()
+        result.append(dict(row) | {"cash_entries": [dict(entry) for entry in entries]})
+    return result
 
 
 @router.patch("/sales/{bill_id}/void")
@@ -542,6 +546,40 @@ def delete_cash_entry(shift_id: str, entry_id: str,
     return {"ok": True, "deleted_id": entry_id}
 
 
+@router.patch("/cash-shifts/{shift_id}/entries/{entry_id}/closed-correction")
+def correct_closed_cash_entry(shift_id: str, entry_id: str, payload: CashEntryUpdate,
+                              db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    shift = db.execute(text("SELECT * FROM cash_drawer_shifts WHERE id=:id AND status='closed' FOR UPDATE"), {"id": shift_id}).mappings().first()
+    if not shift: raise HTTPException(409, "This correction endpoint is only for closed shifts")
+    entry = db.execute(text("SELECT id,entry_type,amount,reference FROM cash_drawer_entries WHERE id=:entry AND shift_id=:shift FOR UPDATE"), {"entry": entry_id, "shift": shift_id}).mappings().first()
+    if not entry: raise HTTPException(404, "Cash movement not found in this shift")
+    if entry["entry_type"] not in ("cash_in", "cash_out", "payout"): raise HTTPException(403, "System-generated sale and refund records cannot be corrected")
+    db.execute(text("UPDATE cash_drawer_entries SET entry_type=:type,amount=:amount,reference=:reference,notes=:notes WHERE id=:entry"), {"type": payload.entry_type, "amount": payload.amount, "reference": payload.reference, "notes": payload.notes, "entry": entry_id})
+    totals = db.execute(text("SELECT entry_type,COALESCE(SUM(amount),0) amount FROM cash_drawer_entries WHERE shift_id=:id GROUP BY entry_type"), {"id": shift_id}).mappings().all()
+    values = {r["entry_type"]: Decimal(str(r["amount"])) for r in totals}
+    expected = Decimal(str(shift["opening_float"])) + values.get("sale", Decimal(0)) + values.get("cash_in", Decimal(0)) - values.get("refund", Decimal(0)) - values.get("cash_out", Decimal(0)) - values.get("payout", Decimal(0))
+    difference = Decimal(str(shift["counted_cash"] or 0)) - expected
+    db.execute(text("UPDATE cash_drawer_shifts SET expected_cash=:expected,cash_difference=:difference WHERE id=:id"), {"expected": expected, "difference": difference, "id": shift_id})
+    audit(db, user.id, "cash_shift.closed_entry_corrected", f"Closed shift {shift_id}: entry {entry_id} changed from {entry['entry_type']} NPR {entry['amount']} to {payload.entry_type} NPR {payload.amount}")
+    db.commit()
+    return {"ok": True, "expected_cash": str(expected), "cash_difference": str(difference)}
+
+@router.delete("/cash-shifts/{shift_id}/entries/{entry_id}/closed-correction")
+def delete_closed_cash_entry(shift_id: str, entry_id: str, db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    shift = db.execute(text("SELECT * FROM cash_drawer_shifts WHERE id=:id AND status='closed' FOR UPDATE"), {"id": shift_id}).mappings().first()
+    if not shift: raise HTTPException(409, "This correction endpoint is only for closed shifts")
+    entry = db.execute(text("SELECT id,entry_type,amount,reference FROM cash_drawer_entries WHERE id=:entry AND shift_id=:shift FOR UPDATE"), {"entry": entry_id, "shift": shift_id}).mappings().first()
+    if not entry: raise HTTPException(404, "Cash movement not found in this shift")
+    if entry["entry_type"] not in ("cash_in", "cash_out", "payout"): raise HTTPException(403, "System-generated sale and refund records cannot be deleted")
+    db.execute(text("DELETE FROM cash_drawer_entries WHERE id=:entry"), {"entry": entry_id})
+    totals = db.execute(text("SELECT entry_type,COALESCE(SUM(amount),0) amount FROM cash_drawer_entries WHERE shift_id=:id GROUP BY entry_type"), {"id": shift_id}).mappings().all()
+    values = {r["entry_type"]: Decimal(str(r["amount"])) for r in totals}
+    expected = Decimal(str(shift["opening_float"])) + values.get("sale", Decimal(0)) + values.get("cash_in", Decimal(0)) - values.get("refund", Decimal(0)) - values.get("cash_out", Decimal(0)) - values.get("payout", Decimal(0))
+    difference = Decimal(str(shift["counted_cash"] or 0)) - expected
+    db.execute(text("UPDATE cash_drawer_shifts SET expected_cash=:expected,cash_difference=:difference WHERE id=:id"), {"expected": expected, "difference": difference, "id": shift_id})
+    audit(db, user.id, "cash_shift.closed_entry_deleted", f"Closed shift {shift_id}: deleted {entry['entry_type']} NPR {entry['amount']} reference {entry['reference'] or ''}")
+    db.commit()
+    return {"ok": True, "deleted_id": entry_id, "expected_cash": str(expected), "cash_difference": str(difference)}
 @router.post("/cash-shifts/{shift_id}/close")
 def close_cash_shift(shift_id: str, payload: ShiftClose, db: Session = Depends(get_db),
                     user=Depends(require_roles(*CASHIERS))):
