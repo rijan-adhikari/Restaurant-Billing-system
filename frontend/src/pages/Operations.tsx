@@ -30,7 +30,7 @@ export default function Operations() {
   const [supplier, setSupplier] = useState({ name: "", phone: "", email: "", address: "", tax_number: "" });
   const [purchase, setPurchase] = useState({ supplier_id: "", items: [{ item_id: "", quantity: "", unit_cost: "" }], notes: "" });
   const [recipe, setRecipe] = useState({ menu_item_id: "", items: [{ item_id: "", quantity: "1" }], yield_quantity: "1", instructions: "" });
-  const [expense, setExpense] = useState({ category: "Food & raw materials", description: "", amount: "", expense_date: today(), department: "Kitchen", payment_status: "paid", supplier_id: "", receipt_reference: "", notes: "" });
+  const [expense, setExpense] = useState({ category: "", description: "", amount: "", expense_date: today(), department: "", payment_status: "paid", supplier_id: "", receipt_reference: "", notes: "" });
   const [reservation, setReservation] = useState({ customer_name: "", phone: "", party_size: "2", reserved_for: "", table_id: "", notes: "" });
   const [movement, setMovement] = useState({ item_id: "", movement_type: "waste", quantity: "", notes: "" });
   const [payrollForm, setPayrollForm] = useState({ user_id: "", period_start: today().slice(0, 8) + "01", period_end: today(), gross_pay: "", deductions: "0", notes: "" });
