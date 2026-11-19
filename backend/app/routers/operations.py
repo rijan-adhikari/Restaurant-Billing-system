@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import uuid
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -352,10 +353,10 @@ def list_detailed_expenses(db: Session = Depends(get_db), user=Depends(require_r
 def create_detailed_expense(payload: ExpenseCreate, db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
     if payload.payment_status not in {"paid", "unpaid", "partial"}:
         raise HTTPException(422, "Invalid payment status")
-    row = db.execute(text("""INSERT INTO expenses(category,description,amount,expense_date,created_by,department,
+    row = db.execute(text("""INSERT INTO expenses(id,category,description,amount,expense_date,created_by,department,
         payment_status,supplier_id,receipt_reference,notes)
-        VALUES(:category,:description,:amount,:date,:user,:department,:status,:supplier,:receipt,:notes) RETURNING *"""),
-        {"category": payload.category, "description": payload.description, "amount": payload.amount,
+        VALUES(:id,:category,:description,:amount,:date,:user,:department,:status,:supplier,:receipt,:notes) RETURNING *"""),
+        {"id": uuid.uuid4(), "category": payload.category, "description": payload.description, "amount": payload.amount,
          "date": payload.expense_date or datetime.utcnow(), "user": user.id, "department": payload.department,
          "status": payload.payment_status, "supplier": payload.supplier_id,
          "receipt": payload.receipt_reference, "notes": payload.notes}).mappings().first()
