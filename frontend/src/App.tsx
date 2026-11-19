@@ -26,7 +26,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/billing", label: t("Billing") }] : []),
     ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/credit", label: t("Credit") }] : []),
     ...(["admin", "manager"].includes(role || "") ? [{ to: "/operations", label: t("Restaurant Operations") }] : []),
-    ...(role === "admin" ? [{ to: "/admin", label: t("Master Panel") }, { to: "/admin-control", label: t("Control Centre") }, { to: "/daily-savings", label: t("Daily savings") }] : []),
+    ...(["admin", "manager"].includes(role || "") ? [{ to: "/admin", label: t("Master Panel") }, { to: "/admin-control", label: t("Control Centre") }, { to: "/daily-savings", label: t("Daily savings") }] : []),
   ];
 
   return (
@@ -120,7 +120,7 @@ export default function App() {
       <Route
         path="/admin"
         element={
-          <ProtectedRoute allowedRoles={["admin"]}>
+          <ProtectedRoute allowedRoles={["admin", "manager"]}>
             <Shell><Admin /></Shell>
           </ProtectedRoute>
         }
@@ -128,7 +128,7 @@ export default function App() {
       <Route
         path="/admin-control"
         element={
-          <ProtectedRoute allowedRoles={["admin"]}>
+          <ProtectedRoute allowedRoles={["admin", "manager"]}>
             <Shell><AdminControl /></Shell>
           </ProtectedRoute>
         }
