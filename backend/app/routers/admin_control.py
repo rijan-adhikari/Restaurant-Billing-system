@@ -582,6 +582,40 @@ def delete_closed_cash_entry(shift_id: str, entry_id: str, db: Session = Depends
     audit(db, user.id, "cash_shift.closed_entry_deleted", f"Closed shift {shift_id}: deleted {entry['entry_type']} NPR {entry['amount']} reference {entry['reference'] or ''}")
     db.commit()
     return {"ok": True, "deleted_id": entry_id, "expected_cash": str(expected), "cash_difference": str(difference)}
+@router.delete("/cash-shifts/{shift_id}/entries/{entry_id}/system-delete")
+def delete_system_cash_entry(shift_id: str, entry_id: str, reason: str = Query(..., min_length=3, max_length=500),
+                            db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    shift = db.execute(text("SELECT * FROM cash_drawer_shifts WHERE id=:id FOR UPDATE"),
+                       {"id": shift_id}).mappings().first()
+    if not shift:
+        raise HTTPException(404, "Cash drawer shift not found")
+    entry = db.execute(text("""SELECT id,entry_type,amount,reference FROM cash_drawer_entries
+        WHERE id=:entry AND shift_id=:shift FOR UPDATE"""),
+        {"entry": entry_id, "shift": shift_id}).mappings().first()
+    if not entry:
+        raise HTTPException(404, "Cash drawer record not found")
+    if entry["entry_type"] not in ("sale", "refund"):
+        raise HTTPException(403, "This endpoint only deletes system-generated sale or refund records")
+    db.execute(text("DELETE FROM cash_drawer_entries WHERE id=:entry"), {"entry": entry_id})
+    if shift["status"] == "closed":
+        totals = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
+            FROM cash_drawer_entries WHERE shift_id=:id GROUP BY entry_type"""),
+            {"id": shift_id}).mappings().all()
+        values = {r["entry_type"]: Decimal(str(r["amount"])) for r in totals}
+        expected = (Decimal(str(shift["opening_float"])) + values.get("sale", Decimal(0))
+                    + values.get("cash_in", Decimal(0)) - values.get("refund", Decimal(0))
+                    - values.get("cash_out", Decimal(0)) - values.get("payout", Decimal(0)))
+        difference = Decimal(str(shift["counted_cash"] or 0)) - expected
+        db.execute(text("""UPDATE cash_drawer_shifts SET expected_cash=:expected,
+            cash_difference=:difference WHERE id=:id"""),
+            {"expected": expected, "difference": difference, "id": shift_id})
+    audit(db, user.id, "cash_shift.system_entry_deleted",
+          f"Shift {shift_id}: deleted system {entry['entry_type']} entry {entry_id}, "
+          f"NPR {entry['amount']}, reference {entry['reference'] or ''}; reason: {reason}")
+    db.commit()
+    return {"ok": True, "deleted_id": entry_id}
+
+
 @router.post("/cash-shifts/{shift_id}/close")
 def close_cash_shift(shift_id: str, payload: ShiftClose, db: Session = Depends(get_db),
                     user=Depends(require_roles(*CASHIERS))):
