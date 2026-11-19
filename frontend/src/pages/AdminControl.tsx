@@ -74,7 +74,10 @@ export default function AdminControl() {
   const addCashEntry = (e: React.FormEvent) => {
     e.preventDefault();
     if (!shift) return;
-    run(() => api.post(`/api/admin/cash-shifts/${shift.id}/entries`, { ...cashEntry, amount: Number(cashEntry.amount) }), "Cash movement recorded.");
+    const isSavings = cashEntry.entry_type === "daily_savings";
+    run(() => api.post(isSavings ? `/api/admin/cash-shifts/${shift.id}/daily-savings` : `/api/admin/cash-shifts/${shift.id}/entries`,
+      isSavings ? { amount: Number(cashEntry.amount), notes: cashEntry.notes } : { ...cashEntry, amount: Number(cashEntry.amount) }),
+      isSavings ? "Amount transferred to daily savings." : "Cash movement recorded.");
     setCashEntry({ entry_type: "cash_in", amount: "", reference: "", notes: "" });
   };
   const editCashEntry = (entry: any) => {
@@ -256,7 +259,7 @@ export default function AdminControl() {
         {shift ? <div className="mt-3 space-y-3">
           <div className="rounded-xl bg-emerald-50 p-3"><p className="text-xs text-emerald-800">OPEN SHIFT · {shift.opened_by_name}</p><p className="mt-1 text-2xl font-bold">{money(shift.expected_cash)}</p><p className="text-xs text-neutral-500">Expected cash in drawer</p></div>
           <form onSubmit={addCashEntry} className="space-y-2">
-            <label className="block text-xs">Movement<select className={field} value={cashEntry.entry_type} onChange={e => setCashEntry({ ...cashEntry, entry_type: e.target.value })}><option value="cash_in">Cash in</option><option value="cash_out">Cash out</option><option value="payout">Payout</option></select></label>
+            <label className="block text-xs">Movement<select className={field} value={cashEntry.entry_type} onChange={e => setCashEntry({ ...cashEntry, entry_type: e.target.value })}><option value="cash_in">Cash in</option><option value="cash_out">Cash out</option><option value="payout">Payout</option><option value="daily_savings">Add to daily savings</option></select></label>
             <input required type="number" min="0.01" step="0.01" className={field} placeholder="Amount (NPR)" value={cashEntry.amount} onChange={e => setCashEntry({ ...cashEntry, amount: e.target.value })} />
             <input className={field} placeholder="Reference" value={cashEntry.reference} onChange={e => setCashEntry({ ...cashEntry, reference: e.target.value })} />
             <input className={field} placeholder="Notes" value={cashEntry.notes} onChange={e => setCashEntry({ ...cashEntry, notes: e.target.value })} />
