@@ -509,17 +509,61 @@ def create_payroll(payload: PayrollCreate, db: Session = Depends(get_db), user=D
     return dict(row)
 
 
+@router.post("/staff/payroll/{payroll_id}/cashout")
+def cashout_payroll(payroll_id: str, payload: PayrollCashout, db: Session = Depends(get_db),
+                    user=Depends(require_roles(*MANAGERS))):
+    _ensure_payroll_payments_table(db)
+    payroll = db.execute(text("SELECT * FROM payroll_entries WHERE id=:id FOR UPDATE"), {"id": payroll_id}).mappings().first()
+    if not payroll:
+        raise HTTPException(404, "Payroll entry not found")
+    net_pay = Decimal(str(payroll["gross_pay"])) - Decimal(str(payroll["deductions"]))
+    paid = Decimal(str(db.execute(text("SELECT COALESCE(SUM(amount),0) FROM payroll_payments WHERE payroll_id=:id"), {"id": payroll_id}).scalar_one()))
+    if payroll["paid_at"] is not None and paid == 0:
+        paid = net_pay
+    remaining = max(net_pay-paid, Decimal("0"))
+    if payload.amount > remaining:
+        raise HTTPException(422, f"Cash-out exceeds remaining salary balance of {remaining}")
+    db.execute(text("""INSERT INTO payroll_payments(payroll_id,amount,payment_date,notes,created_by)
+        VALUES(:payroll,:amount,:date,:notes,:user)"""),
+        {"payroll": payroll_id, "amount": payload.amount, "date": payload.payment_date, "notes": payload.notes, "user": user.id})
+    new_total = paid + payload.amount
+    if new_total >= net_pay:
+        db.execute(text("UPDATE payroll_entries SET paid_at=COALESCE(paid_at,NOW()) WHERE id=:id"), {"id": payroll_id})
+    db.commit()
+    return {"ok": True, "total_paid": str(new_total), "remaining_balance": str(max(net_pay-new_total, Decimal("0")))}
+
+
+@router.delete("/staff/payroll/{payroll_id}")
+def delete_payroll(payroll_id: str, db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    _ensure_payroll_payments_table(db)
+    exists = db.execute(text("SELECT id FROM payroll_entries WHERE id=:id FOR UPDATE"), {"id": payroll_id}).first()
+    if not exists:
+        raise HTTPException(404, "Payroll entry not found")
+    payments = db.execute(text("SELECT COUNT(*) FROM payroll_payments WHERE payroll_id=:id"), {"id": payroll_id}).scalar_one()
+    if payments:
+        raise HTTPException(409, "This payroll has salary cash-outs. Delete is blocked to preserve payment history.")
+    db.execute(text("DELETE FROM payroll_entries WHERE id=:id"), {"id": payroll_id})
+    db.commit()
+    return {"ok": True, "deleted_id": payroll_id}
+
+
 @router.post("/staff/payroll/{payroll_id}/pay")
 def mark_payroll_paid(payroll_id: str, db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
-    row = db.execute(text("""UPDATE payroll_entries SET paid_at=NOW()
-        WHERE id=:id AND paid_at IS NULL RETURNING *"""), {"id": payroll_id}).mappings().first()
-    if not row:
-        existing = db.execute(text("SELECT paid_at FROM payroll_entries WHERE id=:id"), {"id": payroll_id}).mappings().first()
-        if not existing:
-            raise HTTPException(404, "Payroll entry not found")
-        raise HTTPException(409, "Payroll entry is already marked as paid")
+    _ensure_payroll_payments_table(db)
+    payroll = db.execute(text("SELECT * FROM payroll_entries WHERE id=:id FOR UPDATE"), {"id": payroll_id}).mappings().first()
+    if not payroll:
+        raise HTTPException(404, "Payroll entry not found")
+    net_pay = Decimal(str(payroll["gross_pay"])) - Decimal(str(payroll["deductions"]))
+    paid = Decimal(str(db.execute(text("SELECT COALESCE(SUM(amount),0) FROM payroll_payments WHERE payroll_id=:id"), {"id": payroll_id}).scalar_one()))
+    if payroll["paid_at"] is not None or paid >= net_pay:
+        raise HTTPException(409, "Payroll is already fully paid")
+    remaining = net_pay-paid
+    db.execute(text("""INSERT INTO payroll_payments(payroll_id,amount,payment_date,notes,created_by)
+        VALUES(:payroll,:amount,CURRENT_DATE,'Full remaining salary payment',:user)"""),
+        {"payroll": payroll_id, "amount": remaining, "user": user.id})
+    db.execute(text("UPDATE payroll_entries SET paid_at=NOW() WHERE id=:id"), {"id": payroll_id})
     db.commit()
-    return dict(row)
+    return {"ok": True, "total_paid": str(net_pay), "remaining_balance": "0"}
 
 
 @router.post("/reservations")
