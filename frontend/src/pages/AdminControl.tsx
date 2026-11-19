@@ -22,7 +22,6 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const [shift, setShift] = useState<any>(null);
   const [tax, setTax] = useState<any>({ tax_enabled: true, tax_percent: "14", service_charge_enabled: false, service_charge_percent: "0" });
   const [restaurant, setRestaurant] = useState<any>({ name: "", email: "", phone: "", address: "", pan: "", vat: "", currency: "NPR", logo_path: "", qr_image_path: "", receipt_footer: "" });
-  const [loyalty, setLoyalty] = useState<any>({ enabled: true, spend_per_point: "100", point_value: "1" });
   const [openFloat, setOpenFloat] = useState("0");
   const [countedCash, setCountedCash] = useState("");
   const [cashEntry, setCashEntry] = useState({ entry_type: "cash_in", amount: "", reference: "", notes: "" });
@@ -135,7 +134,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const voidSale = async (sale: any) => {
     const reason = window.prompt(`Reason for voiding ${sale.bill_number}:`);
     if (!reason || reason.trim().length < 3) return;
-    if (!window.confirm(`Void ${sale.bill_number}? It will be excluded from reports and recipe stock / loyalty effects will be reversed. Any money already received is not automatically refunded.`)) return;
+    if (!window.confirm(`Void ${sale.bill_number}? It will be excluded from reports and stock effects will be reversed. Any money already received is not automatically refunded.`)) return;
     await run(() => api.patch(`/api/admin/sales/${sale.id}/void`, { reason: reason.trim() }), "Sale voided and excluded from reports.");
   };
   const permanentlyDeleteSale = async (sale: any) => {
@@ -344,14 +343,11 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
       <section className={panel}><h2 className="font-semibold text-lg mb-3">Restaurant identity & receipt</h2><div className="space-y-3">
         {(["name","email","phone","address","pan","vat","currency","logo_path","qr_image_path","receipt_footer"] as const).map(k => <label key={k} className="block text-xs capitalize">{k.replace(/_/g," ")}{k === "address" || k === "receipt_footer" ? <textarea rows={2} className={field + " mt-1"} value={restaurant[k] || ""} onChange={e => setRestaurant({ ...restaurant, [k]: e.target.value })} /> : <input className={field + " mt-1"} value={restaurant[k] || ""} onChange={e => setRestaurant({ ...restaurant, [k]: e.target.value })} />}</label>)}
       </div></section>
-      <section className={panel}><h2 className="font-semibold text-lg mb-3">Tax, service charge & loyalty rules</h2><div className="space-y-3">
+      <section className={panel}><h2 className="font-semibold text-lg mb-3">Tax & service charge</h2><div className="space-y-3">
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!tax.tax_enabled} onChange={e => setTax({ ...tax, tax_enabled: e.target.checked })} /> Enable VAT / tax</label>
         <label className="block text-xs">Tax percent<input type="number" min="0" max="100" step="0.01" className={field + " mt-1"} value={tax.tax_percent} onChange={e => setTax({ ...tax, tax_percent: e.target.value })} /></label>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!tax.service_charge_enabled} onChange={e => setTax({ ...tax, service_charge_enabled: e.target.checked })} /> Enable service charge</label>
         <label className="block text-xs">Service charge percent<input type="number" min="0" max="100" step="0.01" className={field + " mt-1"} value={tax.service_charge_percent} onChange={e => setTax({ ...tax, service_charge_percent: e.target.value })} /></label>
-        <div className="border-t pt-3"><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!loyalty.enabled} onChange={e => setLoyalty({ ...loyalty, enabled: e.target.checked })} /> Enable customer loyalty</label>
-        <label className="block text-xs mt-2">Spend required for 1 point (NPR)<input type="number" min="1" step="0.01" className={field + " mt-1"} value={loyalty.spend_per_point} onChange={e => setLoyalty({ ...loyalty, spend_per_point: e.target.value })} /></label>
-        <label className="block text-xs mt-2">Value per point (NPR)<input type="number" min="0" step="0.01" className={field + " mt-1"} value={loyalty.point_value} onChange={e => setLoyalty({ ...loyalty, point_value: e.target.value })} /></label></div>
         <button className={primary} disabled={busy} onClick={saveSettings}>Save all business settings</button>
       </div></section>
     </div>}
