@@ -180,6 +180,47 @@ def cancel_order(order_id: str, db: Session = Depends(get_db),
     return {"ok": True, "order_id": order.id}
 
 
+@router.patch("/orders/{order_id}/items/{item_id}/remove")
+async def remove_order_item(order_id: str, item_id: str, db: Session = Depends(get_db),
+                            user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager,
+                                                        models.RoleName.waiter, models.RoleName.cashier))):
+    order = db.query(models.Order).filter(models.Order.id == order_id).with_for_update().first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.status != models.OrderStatus.open:
+        raise HTTPException(status_code=400, detail="Items can only be removed from open orders")
+    item = db.query(models.OrderItem).filter(
+        models.OrderItem.id == item_id, models.OrderItem.order_id == order_id
+    ).first()
+    if not item or item.is_cancelled:
+        raise HTTPException(status_code=404, detail="Active order item not found")
+
+    item.is_cancelled = True
+    # Remove the item from KOTs that are still in progress. Served KOT history is retained.
+    active_kots = db.query(models.KOT).filter(
+        models.KOT.order_id == order_id,
+        models.KOT.status != models.KOTStatus.served,
+        models.KOT.status != models.KOTStatus.cancelled,
+    ).all()
+    for kot in active_kots:
+        kot_item = db.query(models.KOTItem).filter(
+            models.KOTItem.kot_id == kot.id,
+            models.KOTItem.order_item_id == item.id,
+        ).first()
+        if kot_item:
+            db.delete(kot_item)
+            db.flush()
+            if db.query(models.KOTItem).filter(models.KOTItem.kot_id == kot.id).count() == 0:
+                kot.status = models.KOTStatus.cancelled
+
+    db.add(models.AuditLog(
+        user_id=user.id, action="order.item.remove",
+        details=f"Removed {item.quantity} x {item.menu_item.name} from open order {order.order_number}",
+    ))
+    db.commit()
+    await manager.broadcast({"type": "kot_update", "order_id": order.id, "item_id": item.id})
+    return {"ok": True, "order_id": order.id, "item_id": item.id}
+
 @router.get("/kots")
 def list_kots(station: models.RouteDestination, db: Session = Depends(get_db), user=Depends(require_roles(
     models.RoleName.admin, models.RoleName.manager, models.RoleName.kitchen, models.RoleName.bar,
@@ -198,7 +239,8 @@ def list_kots(station: models.RouteDestination, db: Session = Depends(get_db), u
             "phone": service_details["phone"] if service_details else None,
             "delivery_address": service_details["delivery_address"] if service_details else None,
             "items": [{"id": i.id, "quantity": i.quantity, "notes": i.notes,
-                       "menu_item_name": i.order_item.menu_item.name} for i in kot.items],
+                       "menu_item_name": i.order_item.menu_item.name}
+                      for i in kot.items if not i.order_item.is_cancelled],
         })
     return result
 
