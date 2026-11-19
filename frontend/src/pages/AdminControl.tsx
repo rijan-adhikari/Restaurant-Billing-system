@@ -23,6 +23,8 @@ export default function AdminControl() {
   const [openFloat, setOpenFloat] = useState("0");
   const [countedCash, setCountedCash] = useState("");
   const [cashEntry, setCashEntry] = useState({ entry_type: "cash_in", amount: "", reference: "", notes: "" });
+  const [editingCashEntry, setEditingCashEntry] = useState<string | null>(null);
+  const [cashEntryEdit, setCashEntryEdit] = useState({ entry_type: "cash_in", amount: "", reference: "", notes: "" });
   const [refund, setRefund] = useState({ bill_id: "", amount: "", reason: "", method: "cash" });
   const [supplierEntry, setSupplierEntry] = useState({ supplier_id: "", entry_type: "payment", amount: "", reference: "", notes: "" });
   const [supplierReturn, setSupplierReturn] = useState({ supplier_id: "", item_id: "", quantity: "", unit_cost: "", reference: "", notes: "" });
@@ -74,6 +76,20 @@ export default function AdminControl() {
     if (!shift) return;
     run(() => api.post(`/api/admin/cash-shifts/${shift.id}/entries`, { ...cashEntry, amount: Number(cashEntry.amount) }), "Cash movement recorded.");
     setCashEntry({ entry_type: "cash_in", amount: "", reference: "", notes: "" });
+  };
+  const editCashEntry = (entry: any) => {
+    setEditingCashEntry(entry.id);
+    setCashEntryEdit({ entry_type: entry.entry_type, amount: String(entry.amount), reference: entry.reference || "", notes: entry.notes || "" });
+  };
+  const saveCashEntryEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!shift || !editingCashEntry) return;
+    run(() => api.patch(`/api/admin/cash-shifts/${shift.id}/entries/${editingCashEntry}`, { ...cashEntryEdit, amount: Number(cashEntryEdit.amount) }), "Cash movement updated.");
+    setEditingCashEntry(null);
+  };
+  const deleteCashEntry = (entry: any) => {
+    if (!shift || !window.confirm(`Delete this ${entry.entry_type.replace("_", " ")} record for ${money(entry.amount)}? This will change the shift expected cash.`)) return;
+    run(() => api.delete(`/api/admin/cash-shifts/${shift.id}/entries/${entry.id}`), "Cash movement deleted.");
   };
   const createRefund = (e: React.FormEvent) => {
     e.preventDefault();
@@ -226,7 +242,25 @@ export default function AdminControl() {
           <div className="border-t pt-3 space-y-2"><label className="block text-xs">Counted cash at close<input required type="number" min="0" step="0.01" className={field + " mt-1"} value={countedCash} onChange={e => setCountedCash(e.target.value)} /></label><button className="w-full rounded-lg bg-neutral-900 px-4 py-2 text-sm font-semibold text-white" disabled={busy || !countedCash} onClick={closeShift}>Close shift & reconcile</button></div>
         </div> : <div className="mt-3 space-y-3"><p className="text-sm text-neutral-500">No drawer session is currently open.</p><label className="block text-xs">Opening float (NPR)<input type="number" min="0" step="0.01" className={field + " mt-1"} value={openFloat} onChange={e => setOpenFloat(e.target.value)} /></label><button className={primary} disabled={busy} onClick={openShift}>Open cash drawer</button></div>}
       </section>
-      <section className={panel}><h2 className="font-semibold text-lg mb-3">Recent shift reconciliation</h2><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Opened</th><th>Staff</th><th>Status</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead><tbody>{data.shifts.map((s: any) => <tr key={s.id} className="border-b"><td className="py-2">{new Date(s.opened_at).toLocaleString()}</td><td>{s.opened_by_name}</td><td className="capitalize">{s.status}</td><td>{s.expected_cash == null ? "—" : money(s.expected_cash)}</td><td>{s.counted_cash == null ? "—" : money(s.counted_cash)}</td><td className={Number(s.cash_difference) < 0 ? "text-red-700" : "text-emerald-700"}>{s.cash_difference == null ? "—" : money(s.cash_difference)}</td></tr>)}</tbody></table></div></section>
+      <section className={panel}>
+        {shift && <div className="mb-5">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold text-lg">Session cash movements</h2><span className="text-xs text-neutral-500">{(shift.cash_entries || []).length} record(s)</span></div>
+          <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Time</th><th>Type</th><th>Reference / notes</th><th>Amount</th><th>Actions</th></tr></thead><tbody>
+            {(shift.cash_entries || []).map((entry: any) => <React.Fragment key={entry.id}>
+              <tr className="border-b align-top"><td className="py-2 whitespace-nowrap">{new Date(entry.created_at).toLocaleString()}</td><td className="capitalize">{entry.entry_type.replace("_", " ")}</td><td>{entry.reference || "—"}{entry.notes ? <p className="text-xs text-neutral-500">{entry.notes}</p> : null}</td><td>{money(entry.amount)}</td><td><div className="flex gap-2"><button type="button" disabled={busy || !["cash_in","cash_out","payout"].includes(entry.entry_type)} onClick={() => editCashEntry(entry)} className="rounded-lg border px-2 py-1 text-xs font-semibold">Edit</button><button type="button" disabled={busy || !["cash_in","cash_out","payout"].includes(entry.entry_type)} onClick={() => deleteCashEntry(entry)} className="rounded-lg bg-red-700 px-2 py-1 text-xs font-semibold text-white">Delete</button></div></td></tr>
+              {editingCashEntry === entry.id && <tr className="border-b bg-neutral-50"><td colSpan={5} className="p-3"><form onSubmit={saveCashEntryEdit} className="grid gap-2 md:grid-cols-2">
+                <label className="block text-xs">Movement<select className={field + " mt-1"} value={cashEntryEdit.entry_type} onChange={e => setCashEntryEdit({ ...cashEntryEdit, entry_type: e.target.value })}><option value="cash_in">Cash in</option><option value="cash_out">Cash out</option><option value="payout">Payout</option></select></label>
+                <label className="block text-xs">Amount (NPR)<input required type="number" min="0.01" step="0.01" className={field + " mt-1"} value={cashEntryEdit.amount} onChange={e => setCashEntryEdit({ ...cashEntryEdit, amount: e.target.value })} /></label>
+                <label className="block text-xs">Reference<input className={field + " mt-1"} value={cashEntryEdit.reference} onChange={e => setCashEntryEdit({ ...cashEntryEdit, reference: e.target.value })} /></label>
+                <label className="block text-xs">Notes<input className={field + " mt-1"} value={cashEntryEdit.notes} onChange={e => setCashEntryEdit({ ...cashEntryEdit, notes: e.target.value })} /></label>
+                <div className="flex gap-2 md:col-span-2"><button className={primary} disabled={busy}>Save changes</button><button type="button" className="rounded-lg border px-4 py-2 text-sm" onClick={() => setEditingCashEntry(null)}>Cancel</button></div>
+              </form></td></tr>}
+            </React.Fragment>)}
+            {(shift.cash_entries || []).length === 0 && <tr><td colSpan={5} className="py-5 text-center text-neutral-400">No cash movements recorded in this session.</td></tr>}
+          </tbody></table></div>
+          <p className="mt-2 text-xs text-neutral-500">Sale and refund records are system-generated and cannot be edited or deleted here.</p>
+        </div>}
+        <h2 className="font-semibold text-lg mb-3">Recent shift reconciliation</h2><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Opened</th><th>Staff</th><th>Status</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead><tbody>{data.shifts.map((s: any) => <tr key={s.id} className="border-b"><td className="py-2">{new Date(s.opened_at).toLocaleString()}</td><td>{s.opened_by_name}</td><td className="capitalize">{s.status}</td><td>{s.expected_cash == null ? "—" : money(s.expected_cash)}</td><td>{s.counted_cash == null ? "—" : money(s.counted_cash)}</td><td className={Number(s.cash_difference) < 0 ? "text-red-700" : "text-emerald-700"}>{s.cash_difference == null ? "—" : money(s.cash_difference)}</td></tr>)}</tbody></table></div></section>
     </div>}
 
     {tab === "refunds" && <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
