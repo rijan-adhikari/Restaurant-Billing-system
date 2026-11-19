@@ -42,6 +42,11 @@ class ExpenseCreate(BaseModel):
     description: str
     amount: Decimal
     expense_date: datetime | None = None
+    department: str = ""
+    payment_status: str = "paid"
+    supplier_id: str | None = None
+    receipt_reference: str | None = None
+    notes: str | None = None
 
 
 class FloorOut(BaseModel):
