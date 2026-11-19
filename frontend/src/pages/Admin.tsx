@@ -23,7 +23,7 @@ interface CustomerHistory {
     items: Array<{ name: string; quantity: number; unit_price: string; total: string }>;
   }>;
 }
-const staffRoles = ["admin", "manager", "waiter", "cashier", "kitchen", "bar"] as const;
+const staffRoles = ["admin", "manager", "waiter", "cashier"] as const;
 
 export default function Admin() {
   const { t } = useLanguage();
@@ -289,14 +289,13 @@ export default function Admin() {
 
       <section className="bg-white rounded-xl shadow p-5">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <div><h2 className="font-semibold">{t("Food menu")}</h2><p className="text-sm text-neutral-500 mt-1">{t("Add and manage dishes, prices, categories and kitchen/bar routing.")}</p></div>
+          <div><h2 className="font-semibold">{t("Food menu")}</h2><p className="text-sm text-neutral-500 mt-1">{t("Add and manage dishes, prices and categories.")}</p></div>
           <button type="button" onClick={downloadFoodMenu} className="rounded-lg border border-brand px-4 py-2 text-sm font-medium text-brand">{t("Download food menu PDF")}</button>
         </div>
         <form ref={menuFormRef} onSubmit={saveMenuItem} className="grid gap-3 md:grid-cols-2">
           <label className="text-sm">{t("Food name")}<input required maxLength={128} className="mt-1 w-full border rounded-lg px-3 py-2" value={menuForm.name} onChange={(e) => setMenuForm({ ...menuForm, name: e.target.value })} /></label>
           <label className="text-sm">{t("Category")}<select required className="mt-1 w-full border rounded-lg px-3 py-2" value={menuForm.category_id} onChange={(e) => setMenuForm({ ...menuForm, category_id: e.target.value })}><option value="">{t("Select category")}</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
           <label className="text-sm">{t("Price (NPR)")}<input required type="number" min="0" step="0.01" className="mt-1 w-full border rounded-lg px-3 py-2" value={menuForm.price} onChange={(e) => setMenuForm({ ...menuForm, price: e.target.value })} /></label>
-          <label className="text-sm">{t("Send order to")}<select className="mt-1 w-full border rounded-lg px-3 py-2" value={menuForm.destination} onChange={(e) => setMenuForm({ ...menuForm, destination: e.target.value })}><option value="kitchen">{t("Kitchen")}</option><option value="bar">{t("Bar")}</option></select></label>
           <label className="text-sm md:col-span-2">{t("Description")}<textarea className="mt-1 w-full border rounded-lg px-3 py-2" rows={2} value={menuForm.description} onChange={(e) => setMenuForm({ ...menuForm, description: e.target.value })} /></label>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={menuForm.is_available} onChange={(e) => setMenuForm({ ...menuForm, is_available: e.target.checked })} />{t("Available for POS orders")}</label>
           <div className="flex gap-2 md:col-span-2"><button type="submit" className="bg-brand text-white rounded-lg px-4 py-2 font-medium">{menuEditingId ? t("Save changes") : t("Add food item")}</button>{menuEditingId && <button type="button" onClick={() => { setMenuEditingId(null); setMenuForm({ category_id: categories[0]?.id || "", name: "", description: "", price: "", destination: "kitchen", is_available: true }); }} className="border rounded-lg px-4 py-2">{t("Cancel")}</button>}</div>
@@ -315,7 +314,7 @@ export default function Admin() {
           <button type="button" onClick={() => { setMenuSearch(""); setMenuCategoryFilter(""); }} className="rounded-lg border px-3 py-2 text-sm">{t("Clear search")}</button>
         </div>
         <p className="mt-2 text-xs text-neutral-500">{t("Items found")}: {visibleMenuItems.length}</p>
-        <div className="mt-2 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2">{t("Food")}</th><th>{t("Category")}</th><th>{t("Price")}</th><th>{t("Send order to")}</th><th>{t("Status")}</th><th>{t("Actions")}</th></tr></thead><tbody>{visibleMenuItems.map((item) => <tr key={item.id} className="border-b last:border-0"><td className="py-2"><div className="font-medium">{item.name}</div>{item.description && <div className="text-xs text-neutral-500">{item.description}</div>}</td><td>{categories.find((category) => category.id === item.category_id)?.name || "—"}</td><td>Rs. {Number(item.price).toFixed(2)}</td><td className="capitalize">{t(item.destination)}</td><td>{item.is_available ? t("Available") : t("Unavailable")}</td><td><div className="flex gap-3"><button type="button" onClick={() => editMenuItem(item)} className="text-brand">{t("Edit")}</button><button type="button" onClick={() => deleteMenuItem(item)} className="text-red-700">{t("Delete")}</button></div></td></tr>)}</tbody></table>{visibleMenuItems.length === 0 && <p className="py-4 text-sm text-neutral-500">{menuSearch || menuCategoryFilter ? t("No food items match your search.") : showUnavailableMenuItems ? t("No food items yet. Add your first dish above.") : t("No available dishes. Use Show unavailable items to view archived dishes.")}</p>}</div>
+        <div className="mt-2 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2">{t("Food")}</th><th>{t("Category")}</th><th>{t("Price")}</th><th>{t("Status")}</th><th>{t("Actions")}</th></tr></thead><tbody>{visibleMenuItems.map((item) => <tr key={item.id} className="border-b last:border-0"><td className="py-2"><div className="font-medium">{item.name}</div>{item.description && <div className="text-xs text-neutral-500">{item.description}</div>}</td><td>{categories.find((category) => category.id === item.category_id)?.name || "—"}</td><td>Rs. {Number(item.price).toFixed(2)}</td><td>{item.is_available ? t("Available") : t("Unavailable")}</td><td><div className="flex gap-3"><button type="button" onClick={() => editMenuItem(item)} className="text-brand">{t("Edit")}</button><button type="button" onClick={() => deleteMenuItem(item)} className="text-red-700">{t("Delete")}</button></div></td></tr>)}</tbody></table>{visibleMenuItems.length === 0 && <p className="py-4 text-sm text-neutral-500">{menuSearch || menuCategoryFilter ? t("No food items match your search.") : showUnavailableMenuItems ? t("No food items yet. Add your first dish above.") : t("No available dishes. Use Show unavailable items to view archived dishes.")}</p>}</div>
       </section>
 
       <section className="bg-white rounded-xl shadow p-5">
