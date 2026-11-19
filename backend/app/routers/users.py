@@ -1,6 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 from sqlalchemy.orm import Session
+import secrets
+import uuid
 
 from app import models, schemas
 from app.database import get_db
@@ -81,20 +84,28 @@ def change_user_password(user_id: str, payload: schemas.PasswordUpdate,
 
 
 @router.delete("/{user_id}")
-def disable_user(user_id: str, db: Session = Depends(get_db),
-                 user=Depends(require_roles(*ADMIN))):
-    member = db.query(models.User).filter(models.User.id == user_id).first()
+def delete_user(user_id: str, db: Session = Depends(get_db),
+                user=Depends(require_roles(*ADMIN))):
+    member = db.query(models.User).filter(models.User.id == user_id).with_for_update().first()
     if not member:
         raise HTTPException(404, "Staff account not found")
     if member.id == user.id:
-        raise HTTPException(409, "You cannot disable your own account")
+        raise HTTPException(409, "You cannot delete your own account")
     if member.role == models.RoleName.admin and member.is_active:
         active_admins = db.query(models.User).filter(
             models.User.role == models.RoleName.admin, models.User.is_active.is_(True)).count()
         if active_admins <= 1:
-            raise HTTPException(409, "The last active administrator cannot be disabled")
+            raise HTTPException(409, "The last active administrator cannot be deleted")
+
+    # User IDs are referenced by historical transactions. Keep the FK target,
+    # but erase login identity and credentials so the account is permanently unusable.
+    deleted_username = f"deleted-{uuid.uuid4().hex}"
+    member.username = deleted_username
+    member.full_name = "Deleted staff account"
+    member.password_hash = hash_password(secrets.token_urlsafe(48))
     member.is_active = False
-    db.add(models.AuditLog(user_id=user.id, action="staff.disabled",
-                           details=f"Disabled staff account {member.username}; historical records retained"))
+    member.must_change_password = True
+    db.add(models.AuditLog(user_id=user.id, action="staff.deleted",
+                           details=f"Permanently removed login account for {deleted_username}"))
     db.commit()
-    return {"ok": True, "disabled": True}
+    return {"ok": True, "deleted": True}
