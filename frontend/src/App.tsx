@@ -7,8 +7,6 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Tables from "./pages/Tables";
 import POS from "./pages/POS";
-import Kitchen from "./pages/Kitchen";
-import Bar from "./pages/Bar";
 import Billing from "./pages/Billing";
 import Admin from "./pages/Admin";
 import Credit from "./pages/Credit";
@@ -24,7 +22,6 @@ function Shell({ children }: { children: React.ReactNode }) {
   const nav = [
     ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/dashboard", label: t("Dashboard") }] : []),
     { to: "/tables", label: t("Tables / POS") },
-    ...(["admin", "manager"].includes(role || "") ? [{ to: "/kitchen", label: t("Kitchen") }, { to: "/bar", label: t("Bar") }] : []),
     ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/billing", label: t("Billing") }] : []),
     ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/credit", label: t("Credit") }] : []),
     ...(["admin", "manager"].includes(role || "") ? [{ to: "/operations", label: t("Restaurant Operations") }] : []),
@@ -92,22 +89,6 @@ export default function App() {
         element={
           <ProtectedRoute>
             <Shell><POS /></Shell>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/kitchen"
-        element={
-          <ProtectedRoute allowedRoles={["admin", "manager", "kitchen"]}>
-            <Shell><Kitchen /></Shell>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/bar"
-        element={
-          <ProtectedRoute allowedRoles={["admin", "manager", "bar"]}>
-            <Shell><Bar /></Shell>
           </ProtectedRoute>
         }
       />
