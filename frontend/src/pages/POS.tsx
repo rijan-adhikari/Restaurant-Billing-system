@@ -139,6 +139,19 @@ export default function POS() {
     }
   };
 
+  const removeSentItem = async (line: SentOrderLine) => {
+    if (!activeOrderId || !window.confirm(`Remove ${line.name} from this order? If it has already been prepared or served, the kitchen may not be able to undo it.`)) return;
+    try {
+      await api.patch(`/api/orders/${activeOrderId}/items/${line.id}/remove`);
+      const refreshed = await api.get("/api/orders/open");
+      const openOrder = (refreshed.data || []).find((order: any) => order.id === activeOrderId);
+      setSentOrderItems(openOrder?.items || []);
+      setMessage(`${line.name} removed from the order.`);
+    } catch (e: any) {
+      setMessage(e?.response?.data?.detail || "Could not remove this item.");
+    }
+  };
+
   const visibleItems = items.filter(
     (i) =>
       i.is_available &&
@@ -212,7 +225,10 @@ export default function POS() {
                 <div className="text-neutral-500">{line.quantity} x Rs. {Number(line.unit_price).toFixed(2)}{line.notes ? " · " + line.notes : ""}</div>
                 <div className="text-[11px] font-semibold text-emerald-700">Sent to kitchen/bar</div>
               </div>
-              <span>Rs. {Number(line.total).toFixed(2)}</span>
+              <div className="flex items-center gap-2">
+                <span>Rs. {Number(line.total).toFixed(2)}</span>
+                <button type="button" onClick={() => removeSentItem(line)} title={`Remove ${line.name}`} aria-label={`Remove ${line.name} from order`} className="rounded border border-red-200 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50">Remove</button>
+              </div>
             </div>
           ))}
           {cart.map((l) => (
