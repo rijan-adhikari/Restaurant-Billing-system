@@ -85,6 +85,7 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
     tax_amount = totals["tax_amount"]
     service_amount = totals["service_charge_amount"]
     discount_amount = totals["discount_amount"]
+    percent_discount_amount = money((subtotal + tax_amount + service_amount) * payload.discount_percent / Decimal("100"))
     grand_total = totals["grand_total"]
 
     tendered_total = sum((p.amount for p in payload.payments), Decimal("0"))
