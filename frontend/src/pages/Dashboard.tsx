@@ -18,7 +18,6 @@ interface Summary {
   monthly_estimated_cogs: string;
   yearly_estimated_cogs: string;
   outstanding: string;
-  pending_kots: number;
   occupied_tables: number;
 }
 
@@ -27,7 +26,7 @@ const emptySummary: Summary = {
   daily_expenses: "0", monthly_expenses: "0", yearly_expenses: "0",
   daily_profit: "0", monthly_profit: "0", yearly_profit: "0",
   daily_estimated_cogs: "0", monthly_estimated_cogs: "0", yearly_estimated_cogs: "0",
-  outstanding: "0", pending_kots: 0, occupied_tables: 0,
+  outstanding: "0", occupied_tables: 0,
 };
 
 export default function Dashboard() {
@@ -96,7 +95,7 @@ export default function Dashboard() {
     [t("Daily expenses"), summary.daily_expenses], [t("Monthly expenses"), summary.monthly_expenses], [t("Yearly expenses"), summary.yearly_expenses],
     [t("Estimated daily profit / loss"), summary.daily_profit], [t("Estimated monthly profit / loss"), summary.monthly_profit], [t("Estimated yearly profit / loss"), summary.yearly_profit],
     [t("Daily estimated COGS"), summary.daily_estimated_cogs], [t("Monthly estimated COGS"), summary.monthly_estimated_cogs], [t("Yearly estimated COGS"), summary.yearly_estimated_cogs],
-    [t("Outstanding credit"), summary.outstanding], [t("Pending KOTs"), String(summary.pending_kots)], [t("Occupied tables"), String(summary.occupied_tables)],
+    [t("Outstanding credit"), summary.outstanding], [t("Occupied tables"), String(summary.occupied_tables)],
   ];
 
   return (
