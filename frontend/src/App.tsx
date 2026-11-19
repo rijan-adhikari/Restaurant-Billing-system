@@ -1,17 +1,17 @@
-import React, { useState } from "react";
+import React, { Suspense, lazy, useState } from "react";
 import { Routes, Route, Navigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import { useLanguage } from "./context/LanguageContext";
 import ProtectedRoute from "./components/ProtectedRoute";
-import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import Tables from "./pages/Tables";
-import POS from "./pages/POS";
-import Billing from "./pages/Billing";
-import Admin from "./pages/Admin";
-import Credit from "./pages/Credit";
-import Operations from "./pages/Operations";
-import AdminControl from "./pages/AdminControl";
+const Login = lazy(() => import("./pages/Login"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Tables = lazy(() => import("./pages/Tables"));
+const POS = lazy(() => import("./pages/POS"));
+const Billing = lazy(() => import("./pages/Billing"));
+const Admin = lazy(() => import("./pages/Admin"));
+const Credit = lazy(() => import("./pages/Credit"));
+const Operations = lazy(() => import("./pages/Operations"));
+const AdminControl = lazy(() => import("./pages/AdminControl"));
 
 function Shell({ children }: { children: React.ReactNode }) {
   const { fullName, role, logout } = useAuth();
@@ -66,7 +66,7 @@ export default function App() {
   const { token } = useAuth();
 
   return (
-    <Routes>
+    <Suspense fallback={<div className="min-h-[40vh] flex items-center justify-center text-sm text-neutral-500">Loading...</div>}><Routes>
       <Route path="/login" element={token ? <Navigate to="/dashboard" /> : <Login />} />
       <Route
         path="/dashboard"
@@ -133,6 +133,6 @@ export default function App() {
         }
       />
       <Route path="*" element={<Navigate to={token ? "/dashboard" : "/login"} />} />
-    </Routes>
+    </Routes></Suspense>
   );
 }
