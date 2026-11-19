@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api/client";
 
-interface OpenOrder { id: string; order_number: string; table_name: string; subtotal: string; grand_total: string; tax_amount: string; tax_percent: string; service_charge_amount: string; service_charge_percent: string; cabin_fee?: string; service_type?: string; customer_name?: string | null; phone?: string | null; delivery_address?: string | null; delivery_fee?: string; items: Array<{ name: string; quantity: number; unit_price: string; total: string }>; }
+interface OpenOrder { id: string; order_number: string; table_id?: string; table_name: string; subtotal: string; grand_total: string; tax_amount: string; tax_percent: string; service_charge_amount: string; service_charge_percent: string; cabin_fee?: string; service_type?: string; customer_name?: string | null; phone?: string | null; delivery_address?: string | null; delivery_fee?: string; items: Array<{ name: string; quantity: number; unit_price: string; total: string }>; }
 interface Customer { id: string; name: string; phone?: string | null; }
 
 const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -10,6 +10,8 @@ export default function Billing() {
   const [orders, setOrders] = useState<OpenOrder[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [orderId, setOrderId] = useState("");
+  const [mergeOrderIds, setMergeOrderIds] = useState<string[]>([]);
+  const [merging, setMerging] = useState(false);
   const [method, setMethod] = useState("cash");
   const [amount, setAmount] = useState("");
   const [discountPercent, setDiscountPercent] = useState("0");
@@ -48,6 +50,44 @@ export default function Billing() {
       .then((response) => setLoyaltyBalance(Number(response.data.points_balance || 0)))
       .catch(() => setLoyaltyBalance(0));
   }, [customerId]);
+
+  const toggleMergeOrder = (id: string) => {
+    setMergeOrderIds((current) => {
+      if (current.includes(id)) return current.filter((value) => value !== id);
+      if (current.length >= 3) {
+        setError("You can merge a maximum of three tables.");
+        return current;
+      }
+      setError("");
+      return [...current, id];
+    });
+  };
+
+  const mergeTables = async () => {
+    if (mergeOrderIds.length < 2 || mergeOrderIds.length > 3) {
+      setError("Select two or three occupied tables to merge.");
+      return;
+    }
+    setMerging(true);
+    setError("");
+    try {
+      const primaryOrderId = mergeOrderIds[0];
+      const combinedAmount = orders
+        .filter((order) => mergeOrderIds.includes(order.id))
+        .reduce((total, order) => total + Number(order.grand_total || 0), 0);
+      await api.post("/api/orders/merge", { order_ids: mergeOrderIds });
+      await loadData();
+      setOrderId(primaryOrderId);
+      setAmount(method === "credit" ? "0" : roundMoney(combinedAmount).toFixed(2));
+      setMergeOrderIds([]);
+      setPreview(null);
+      setResult(null);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || "Could not merge the selected tables.");
+    } finally {
+      setMerging(false);
+    }
+  };
 
   const selectOrder = (id: string) => {
     setOrderId(id);
@@ -180,6 +220,28 @@ export default function Billing() {
     <div className="max-w-2xl">
       <h1 className="text-2xl font-semibold mb-4">Billing</h1>
       <div className="bg-white rounded-xl shadow p-5 space-y-3">
+        <div className="rounded-lg border p-3 space-y-2">
+          <div>
+            <p className="font-medium text-sm">Merge tables into one bill</p>
+            <p className="text-xs text-neutral-500">Select 2 or 3 occupied dine-in tables, then merge their orders before generating the bill.</p>
+          </div>
+          <div className="space-y-1 max-h-40 overflow-y-auto">
+            {orders.filter((order) => !order.service_type || order.service_type === "dine_in").map((order) => (
+              <label key={order.id} className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-neutral-50 text-sm">
+                <span>{order.table_name} · {order.order_number}</span>
+                <span className="flex items-center gap-2">
+                  <span className="text-neutral-600">Rs. {order.grand_total}</span>
+                  <input type="checkbox" checked={mergeOrderIds.includes(order.id)} onChange={() => toggleMergeOrder(order.id)} disabled={merging || (!mergeOrderIds.includes(order.id) && mergeOrderIds.length >= 3)} />
+                </span>
+              </label>
+            ))}
+            {orders.filter((order) => !order.service_type || order.service_type === "dine_in").length === 0 && <p className="text-xs text-neutral-500">No open dine-in table orders available.</p>}
+          </div>
+          <button type="button" onClick={mergeTables} disabled={merging || mergeOrderIds.length < 2} className="w-full rounded-lg bg-neutral-900 text-white py-2 text-sm font-medium disabled:opacity-40">
+            {merging ? "Merging tables..." : `Merge ${mergeOrderIds.length || ""} table${mergeOrderIds.length === 1 ? "" : "s"}`}
+          </button>
+        </div>
+
         <label className="block text-sm font-medium">Open order</label>
         <select className="w-full border rounded-lg px-3 py-2" value={orderId} onChange={(e) => selectOrder(e.target.value)}>
           <option value="">Select an open order</option>
