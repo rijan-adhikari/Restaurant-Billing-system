@@ -454,7 +454,13 @@ def list_cash_shifts(limit: int = Query(50, ge=1, le=200),
         FROM cash_drawer_shifts s JOIN users u ON u.id=s.opened_by
         LEFT JOIN users c ON c.id=s.closed_by ORDER BY s.opened_at DESC LIMIT :limit"""),
         {"limit": limit}).mappings().all()
-    return [dict(row) for row in rows]
+    result = []
+    for row in rows:
+        entries = db.execute(text("""SELECT e.id,e.entry_type,e.amount,e.reference,e.notes,e.created_at,u.full_name created_by_name
+            FROM cash_drawer_entries e JOIN users u ON u.id=e.created_by
+            WHERE e.shift_id=:id ORDER BY e.created_at DESC"""), {"id": row["id"]}).mappings().all()
+        result.append(dict(row) | {"cash_entries": [dict(entry) for entry in entries]})
+    return result
 
 
 @router.get("/cash-shifts/current")
