@@ -90,28 +90,31 @@ export default function Dashboard() {
     }
   };
 
-  const cards = [
+  const allCards = [
     [t("Daily sales"), summary.daily_sales], [t("Monthly sales"), summary.monthly_sales], [t("Yearly sales"), summary.yearly_sales],
     [t("Daily expenses"), summary.daily_expenses], [t("Monthly expenses"), summary.monthly_expenses], [t("Yearly expenses"), summary.yearly_expenses],
     [t("Estimated daily profit / loss"), summary.daily_profit], [t("Estimated monthly profit / loss"), summary.monthly_profit], [t("Estimated yearly profit / loss"), summary.yearly_profit],
     [t("Daily estimated COGS"), summary.daily_estimated_cogs], [t("Monthly estimated COGS"), summary.monthly_estimated_cogs], [t("Yearly estimated COGS"), summary.yearly_estimated_cogs],
     [t("Outstanding credit"), summary.outstanding], [t("Occupied tables"), String(summary.occupied_tables)],
   ];
+  const cards = role === "manager"
+    ? [[t("Daily sales"), summary.daily_sales], [t("Daily expenses"), summary.daily_expenses], [t("Occupied tables"), String(summary.occupied_tables)], [t("Outstanding credit"), summary.outstanding]]
+    : allCards;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-wrap justify-between gap-3 items-end">
         <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">{t("Royal Skye · Overview")}</p><h1 className="mt-1 text-2xl font-bold">{t("Good to see you,")} {fullName}</h1><p className="text-sm text-neutral-500 capitalize">{role} · {t("Sales and operations snapshot")}</p></div>
-        <div className="flex flex-wrap items-end gap-2"><label className="text-sm">{t("Report date")}<input type="date" className="block border rounded-lg px-3 py-2 mt-1" value={reportDate} onChange={(e) => setReportDate(e.target.value)} /></label><button type="button" onClick={downloadDashboardPdf} className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">{t("Download dashboard PDF")}</button></div>
+        <div className="flex flex-wrap items-end gap-2"><label className="text-sm">{t("Report date")}<input type="date" className="block border rounded-lg px-3 py-2 mt-1" value={reportDate} onChange={(e) => setReportDate(e.target.value)} /></label>{role !== "manager" && <button type="button" onClick={downloadDashboardPdf} className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">{t("Download dashboard PDF")}</button>}</div>
       </div>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
-        {cards.map(([label, value]) => label === t("Daily sales") ? <button type="button" key={label} onClick={openDailySales} className="rounded-2xl border border-neutral-200 bg-white p-4 text-left shadow-sm hover:border-brand md:p-5"><p className="text-sm text-neutral-500">{label} · {t("View details")}</p><p className="text-2xl font-semibold mt-1">Rs. {value}</p></button> : label === t("Monthly sales") ? <button type="button" key={label} onClick={openMonthlySales} className="rounded-2xl border border-neutral-200 bg-white p-4 text-left shadow-sm hover:border-brand md:p-5"><p className="text-sm text-neutral-500">{label} · {t("View details")}</p><p className="text-2xl font-semibold mt-1">Rs. {value}</p></button> : label === t("Daily expenses") ? <Link key={label} to="/operations?tab=expenses" className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm hover:border-brand md:p-5"><p className="text-sm text-neutral-500">{label} · {t("View details")}</p><p className="text-2xl font-semibold mt-1 text-red-700">Rs. {value}</p></Link> : <div key={label} className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm md:p-5"><p className="text-sm text-neutral-500">{label}</p><p className={`text-2xl font-semibold mt-1 ${label.toLowerCase().includes("expense") || (label.toLowerCase().includes("profit") && Number(value) < 0) ? "text-red-700" : ""}`}>Rs. {value}</p></div>)}
+        {cards.map(([label, value]) => label === t("Daily sales") ? <button type="button" key={label} onClick={openDailySales} className="rounded-2xl border border-neutral-200 bg-white p-4 text-left shadow-sm hover:border-brand md:p-5"><p className="text-sm text-neutral-500">{label} · {t("View details")}</p><p className="text-2xl font-semibold mt-1">{label === t("Occupied tables") ? value : `Rs. ${value}`}</p></button> : label === t("Monthly sales") ? <button type="button" key={label} onClick={openMonthlySales} className="rounded-2xl border border-neutral-200 bg-white p-4 text-left shadow-sm hover:border-brand md:p-5"><p className="text-sm text-neutral-500">{label} · {t("View details")}</p><p className="text-2xl font-semibold mt-1">Rs. {value}</p></button> : label === t("Daily expenses") ? <Link key={label} to="/operations?tab=expenses" className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm hover:border-brand md:p-5"><p className="text-sm text-neutral-500">{label} · {t("View details")}</p><p className="text-2xl font-semibold mt-1 text-red-700">Rs. {value}</p></Link> : <div key={label} className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm md:p-5"><p className="text-sm text-neutral-500">{label}</p><p className={`text-2xl font-semibold mt-1 ${label.toLowerCase().includes("expense") || (label.toLowerCase().includes("profit") && Number(value) < 0) ? "text-red-700" : ""}`}>{label === t("Occupied tables") ? value : `Rs. ${value}`}</p></div>)}
       </div>
-      {(role === "admin" || role === "manager") && <div className="grid gap-3 sm:grid-cols-2">
+      {role === "admin" && <div className="grid gap-3 sm:grid-cols-2">
         <Link to="/operations?tab=inventory" className="rounded-xl border bg-white p-4 shadow-sm hover:border-brand"><p className="font-semibold">{t("Inventory")}</p><p className="text-sm text-neutral-500">{t("Open stock register and manage stock levels")}</p></Link>
         <Link to="/operations?tab=expenses" className="rounded-xl border bg-white p-4 shadow-sm hover:border-brand"><p className="font-semibold">{t("Expenses")}</p><p className="text-sm text-neutral-500">{t("Open expense register and record expenses")}</p></Link>
       </div>}
-      {lowStockItems.length > 0 && <section className="rounded-xl border border-amber-300 bg-amber-50 p-5">
+      {role === "admin" && lowStockItems.length > 0 && <section className="rounded-xl border border-amber-300 bg-amber-50 p-5">
         <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold text-amber-900">{t("Low stock alert")}</h2><span className="rounded-full bg-amber-200 px-3 py-1 text-sm font-semibold text-amber-900">{lowStockItems.length}</span></div>
         <p className="mt-1 text-sm text-amber-900">{t("These items are at or below their reorder level. This alert appears whenever you open the dashboard until stock is replenished.")}</p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{lowStockItems.map((item) => <div key={item.id} className="rounded-lg border border-amber-200 bg-white p-3 text-sm"><p className="font-semibold">{item.name}</p><p>{t("On hand")}: {item.quantity} {item.unit}</p><p>{t("Reorder")}: {item.reorder_level} {item.unit}</p></div>)}</div>
