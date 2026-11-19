@@ -52,7 +52,7 @@ def _create_database_backup(destination: Path) -> None:
 
 
 @router.get("/backup")
-def download_database_backup(user=Depends(require_roles(*MANAGERS))):
+def download_database_backup(user=Depends(require_roles(*ADMIN))):
     backup_dir = Path(__file__).resolve().parents[2] / "backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
     filename = "royal-skye-" + datetime.utcnow().strftime("%Y%m%d-%H%M%S") + ".dump"
@@ -64,7 +64,7 @@ def download_database_backup(user=Depends(require_roles(*MANAGERS))):
 @router.post("/restore")
 def restore_database_backup(backup_file: UploadFile = File(...),
                             confirmation: str = Form(...),
-                            db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+                            db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     if confirmation != "RESTORE ROYAL SKYE DATABASE":
         raise HTTPException(400, "Type the exact restore confirmation phrase")
     if not backup_file.filename or not backup_file.filename.lower().endswith(".dump"):
@@ -203,7 +203,7 @@ def _reverse_bill_side_effects(db: Session, bill, user_id: str) -> None:
 
 @router.get("/sales")
 def list_sales(start: date | None = None, end: date | None = None,
-               db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+               db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     if start and end and end < start:
         raise HTTPException(422, "End date must not precede start date")
     rows = db.execute(text("""SELECT b.id,b.bill_number,b.business_date,b.created_at,b.grand_total,
@@ -222,7 +222,7 @@ def list_sales(start: date | None = None, end: date | None = None,
 
 @router.patch("/sales/{bill_id}/void")
 def void_sale(bill_id: str, payload: SaleVoid, db: Session = Depends(get_db),
-              user=Depends(require_roles(*MANAGERS))):
+              user=Depends(require_roles(*ADMIN))):
     bill = db.query(models.Bill).filter(models.Bill.id == bill_id).with_for_update().first()
     if not bill:
         raise HTTPException(404, "Sale not found")
@@ -240,7 +240,7 @@ def void_sale(bill_id: str, payload: SaleVoid, db: Session = Depends(get_db),
 
 @router.delete("/sales/{bill_id}")
 def permanently_delete_sale(bill_id: str, db: Session = Depends(get_db),
-                             user=Depends(require_roles(*MANAGERS))):
+                             user=Depends(require_roles(*ADMIN))):
     bill = db.query(models.Bill).filter(models.Bill.id == bill_id).with_for_update().first()
     if not bill:
         raise HTTPException(404, "Sale not found")
@@ -436,7 +436,7 @@ def update_service_order_status(order_id: str, payload: ServiceOrderStatusUpdate
 
 @router.get("/audit")
 def list_audit_logs(limit: int = Query(100, ge=1, le=500),
-                    db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+                    db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     rows = db.execute(text("""SELECT a.id,a.action,a.details,a.created_at,u.username,u.full_name
         FROM audit_logs a LEFT JOIN users u ON u.id=a.user_id
         ORDER BY a.created_at DESC LIMIT :limit"""), {"limit": limit}).mappings().all()
