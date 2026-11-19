@@ -17,7 +17,7 @@ def list_categories(db: Session = Depends(get_db), user=Depends(get_current_user
 
 @router.post("/categories", response_model=schemas.CategoryOut)
 def create_category(payload: schemas.CategoryCreate, db: Session = Depends(get_db),
-                    user=Depends(require_roles(models.RoleName.admin))):
+                    user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager))):
     category = models.Category(name=payload.name.strip(), sort_order=payload.sort_order)
     db.add(category)
     db.commit()
@@ -32,7 +32,7 @@ def list_menu_items(db: Session = Depends(get_db), user=Depends(get_current_user
 
 @router.post("/menu-items", response_model=schemas.MenuItemOut)
 def create_menu_item(payload: schemas.MenuItemCreate, db: Session = Depends(get_db),
-                      user=Depends(require_roles(models.RoleName.admin))):
+                      user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager))):
     item = models.MenuItem(**payload.model_dump())
     db.add(item)
     db.commit()
@@ -42,7 +42,7 @@ def create_menu_item(payload: schemas.MenuItemCreate, db: Session = Depends(get_
 
 @router.patch("/menu-items/{item_id}", response_model=schemas.MenuItemOut)
 def update_menu_item(item_id: str, payload: schemas.MenuItemCreate, db: Session = Depends(get_db),
-                      user=Depends(require_roles(models.RoleName.admin))):
+                      user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager))):
     item = db.query(models.MenuItem).filter(models.MenuItem.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Menu item not found")
@@ -55,7 +55,7 @@ def update_menu_item(item_id: str, payload: schemas.MenuItemCreate, db: Session 
 
 @router.delete("/categories/{category_id}")
 def delete_category(category_id: str, db: Session = Depends(get_db),
-                    user=Depends(require_roles(models.RoleName.admin))):
+                    user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager))):
     category = db.query(models.Category).filter(models.Category.id == category_id).first()
     if not category:
         raise HTTPException(404, "Category not found")
@@ -69,7 +69,7 @@ def delete_category(category_id: str, db: Session = Depends(get_db),
 
 @router.delete("/menu-items/{item_id}")
 def delete_menu_item(item_id: str, db: Session = Depends(get_db),
-                     user=Depends(require_roles(models.RoleName.admin))):
+                     user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager))):
     item = db.query(models.MenuItem).filter(models.MenuItem.id == item_id).first()
     if not item:
         raise HTTPException(404, "Menu item not found")
