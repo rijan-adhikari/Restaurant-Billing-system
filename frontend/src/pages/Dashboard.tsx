@@ -35,8 +35,6 @@ export default function Dashboard() {
   const { t } = useLanguage();
   const [reportDate, setReportDate] = useState(new Date().toISOString().slice(0, 10));
   const [summary, setSummary] = useState<Summary>(emptySummary);
-  const [clearText, setClearText] = useState("");
-  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [lowStockItems, setLowStockItems] = useState<any[]>([]);
   const [dailySales, setDailySales] = useState<any[]>([]);
@@ -52,22 +50,6 @@ export default function Dashboard() {
     load().catch(() => setError("Could not load dashboard metrics."));
     api.get("/api/dashboard/low-stock").then((response) => setLowStockItems(response.data)).catch(() => setLowStockItems([]));
   }, [reportDate, role]);
-
-  const clearSales = async () => {
-    if (clearText !== "CLEAR SALES") {
-      setError("Type CLEAR SALES exactly to continue.");
-      return;
-    }
-    if (!window.confirm("This permanently removes all bills, payments, and credit balances. Continue?")) return;
-    try {
-      await api.delete("/api/dashboard/sales");
-      setClearText("");
-      setMessage("Sales data cleared.");
-      await load();
-    } catch (e: any) {
-      setError(e?.response?.data?.detail || "Could not clear sales data.");
-    }
-  };
 
   const openDailySales = async () => {
     setShowDailySales(true);
@@ -136,7 +118,6 @@ export default function Dashboard() {
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{lowStockItems.map((item) => <div key={item.id} className="rounded-lg border border-amber-200 bg-white p-3 text-sm"><p className="font-semibold">{item.name}</p><p>{t("On hand")}: {item.quantity} {item.unit}</p><p>{t("Reorder")}: {item.reorder_level} {item.unit}</p></div>)}</div>
         <Link to="/operations?tab=inventory" className="mt-3 inline-block text-sm font-semibold text-amber-900 underline">{t("Open inventory")}</Link>
       </section>}
-      {message && <p className="text-sm text-green-700">{message}</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
       {showMonthlySales && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" onClick={() => setShowMonthlySales(false)}>
         <section className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
@@ -150,7 +131,6 @@ export default function Dashboard() {
           {salesLoading ? <p className="py-8 text-center">{t("Loading...")}</p> : dailySales.length === 0 ? <p className="py-8 text-center text-sm text-neutral-500">{t("No sales recorded for this date.")}</p> : <div className="mt-4 space-y-4">{dailySales.map((bill) => <article key={bill.id} className="rounded-xl border p-4"><div className="flex flex-wrap justify-between gap-2"><div><p className="font-semibold">{bill.bill_number} · {bill.customer_name}</p><p className="text-xs text-neutral-500">{bill.customer_phone || t("No phone")} · {bill.table_name} · {new Date(bill.created_at).toLocaleString()}</p></div><div className="text-right text-sm"><p className="font-semibold">Rs. {bill.grand_total}</p><p className="text-neutral-500">{t("Paid")}: Rs. {bill.amount_paid} · {t("Outstanding")}: Rs. {bill.outstanding_amount}</p></div></div><div className="mt-3 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2">{t("Food")}</th><th>{t("Quantity")}</th><th>{t("Price")}</th><th>{t("Total")}</th></tr></thead><tbody>{bill.items.map((item: any, index: number) => <tr key={index} className="border-b last:border-0"><td className="py-2">{item.name}</td><td>{item.quantity}</td><td>Rs. {item.unit_price}</td><td>Rs. {item.total}</td></tr>)}</tbody></table></div></article>)}</div>}
         </section>
       </div>}
-      {role === "admin" && <section className="bg-white rounded-xl shadow p-5 border border-red-100"><h2 className="font-semibold text-red-800">{t("Clear sales data")}</h2><p className="text-sm text-neutral-600 mt-1 mb-3">{t("This removes bills, payments, credit balances, and completed/open order state. Menu, customers, staff, and expenses are preserved.")}</p><div className="flex flex-wrap gap-2"><input className="border rounded-lg px-3 py-2" placeholder={t("Type CLEAR SALES")} value={clearText} onChange={(e) => setClearText(e.target.value)} /><button type="button" onClick={clearSales} className="bg-red-700 text-white rounded-lg px-4 py-2 font-medium">{t("Clear all sales")}</button></div></section>}
     </div>
   );
 }
