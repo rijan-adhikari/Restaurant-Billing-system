@@ -1,0 +1,12 @@
+import React,{useEffect,useState} from "react";
+import {api} from "../api/client";
+const money=(v:any)=>"Rs. "+Number(v||0).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+export default function DailySavings(){
+ const [data,setData]=useState<any>({total:"0",entries:[]}),[error,setError]=useState(""),[loading,setLoading]=useState(true);
+ const load=async()=>{try{const r=await api.get("/api/admin/daily-savings");setData(r.data);setError("");}catch(e:any){setError(e?.response?.data?.detail||"Could not load daily savings.");}finally{setLoading(false);}};
+ useEffect(()=>{load();},[]);
+ return <div className="mx-auto max-w-6xl space-y-5"><header className="flex items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-widest text-brand">Royal Skye · Finance</p><h1 className="mt-1 text-3xl font-bold">Daily savings</h1><p className="text-sm text-neutral-500">Cash transferred from the drawer into savings.</p></div><button onClick={load} className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white">Refresh</button></header>
+ {error&&<p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+ <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm"><p className="text-sm text-neutral-500">Total accumulated savings</p><p className="mt-1 text-3xl font-bold text-emerald-700">{money(data.total)}</p></section>
+ <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm"><h2 className="mb-3 text-lg font-semibold">Savings history</h2>{loading?<p>Loading…</p>:data.entries.length===0?<p className="text-sm text-neutral-500">No savings recorded yet. Add an amount from Control Centre → Cash drawer.</p>:<div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b text-xs text-neutral-500"><th className="py-2">Date & time</th><th>Amount</th><th>Notes</th><th>Recorded by</th></tr></thead><tbody>{data.entries.map((x:any)=><tr key={x.id} className="border-b"><td className="py-3">{new Date(x.created_at).toLocaleString()}</td><td className="font-semibold text-emerald-700">{money(x.amount)}</td><td>{x.notes||"—"}</td><td>{x.created_by_name}</td></tr>)}</tbody></table></div>}</section></div>;
+}
