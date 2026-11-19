@@ -42,7 +42,7 @@ def create_menu_item(payload: schemas.MenuItemCreate, db: Session = Depends(get_
 
 @router.patch("/menu-items/{item_id}", response_model=schemas.MenuItemOut)
 def update_menu_item(item_id: str, payload: schemas.MenuItemCreate, db: Session = Depends(get_db),
-                      user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager))):
+                      user=Depends(require_roles(models.RoleName.admin))):
     item = db.query(models.MenuItem).filter(models.MenuItem.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Menu item not found")
@@ -55,7 +55,7 @@ def update_menu_item(item_id: str, payload: schemas.MenuItemCreate, db: Session 
 
 @router.delete("/categories/{category_id}")
 def delete_category(category_id: str, db: Session = Depends(get_db),
-                    user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager))):
+                    user=Depends(require_roles(models.RoleName.admin))):
     category = db.query(models.Category).filter(models.Category.id == category_id).first()
     if not category:
         raise HTTPException(404, "Category not found")
