@@ -443,6 +443,45 @@ def list_audit_logs(limit: int = Query(100, ge=1, le=500),
     return [dict(row) for row in rows]
 
 
+
+def _ensure_daily_savings_table(db: Session):
+    db.execute(text("""CREATE TABLE IF NOT EXISTS daily_savings (
+        id BIGSERIAL PRIMARY KEY, shift_id UUID REFERENCES cash_drawer_shifts(id),
+        amount NUMERIC(12,2) NOT NULL CHECK (amount > 0), notes TEXT,
+        created_by UUID NOT NULL REFERENCES users(id), created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )"""))
+    db.commit()
+
+
+@router.get("/daily-savings")
+def list_daily_savings(db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    _ensure_daily_savings_table(db)
+    rows = db.execute(text("""SELECT s.id,s.shift_id,s.amount,s.notes,s.created_at,u.full_name created_by_name
+        FROM daily_savings s JOIN users u ON u.id=s.created_by ORDER BY s.created_at DESC LIMIT 1000""")).mappings().all()
+    total = db.execute(text("SELECT COALESCE(SUM(amount),0) FROM daily_savings")).scalar_one()
+    return {"total": str(total), "entries": [dict(row) for row in rows]}
+
+
+@router.post("/cash-shifts/{shift_id}/daily-savings")
+def add_daily_savings(shift_id: str, payload: CashEntry, db: Session = Depends(get_db),
+                      user=Depends(require_roles(*CASHIERS))):
+    _ensure_daily_savings_table(db)
+    shift = db.execute(text("SELECT id,opening_float FROM cash_drawer_shifts WHERE id=:id AND status='open' FOR UPDATE"), {"id": shift_id}).mappings().first()
+    if not shift:
+        raise HTTPException(409, "Cash shift is not open")
+    totals = db.execute(text("SELECT entry_type,COALESCE(SUM(amount),0) amount FROM cash_drawer_entries WHERE shift_id=:id GROUP BY entry_type"), {"id": shift_id}).mappings().all()
+    amounts = {row["entry_type"]: Decimal(str(row["amount"])) for row in totals}
+    expected = Decimal(str(shift["opening_float"])) + amounts.get("sale", Decimal(0)) + amounts.get("cash_in", Decimal(0)) - amounts.get("refund", Decimal(0)) - amounts.get("cash_out", Decimal(0)) - amounts.get("payout", Decimal(0))
+    if payload.amount > expected:
+        raise HTTPException(422, f"Savings amount exceeds available drawer cash of {expected}")
+    db.execute(text("""INSERT INTO cash_drawer_entries(shift_id,entry_type,amount,reference,notes,created_by)
+        VALUES(:shift,'cash_out',:amount,'Daily savings',:notes,:user)"""), {"shift":shift_id,"amount":payload.amount,"notes":payload.notes,"user":user.id})
+    row=db.execute(text("INSERT INTO daily_savings(shift_id,amount,notes,created_by) VALUES(:shift,:amount,:notes,:user) RETURNING *"), {"shift":shift_id,"amount":payload.amount,"notes":payload.notes,"user":user.id}).mappings().first()
+    audit(db,user.id,"daily_savings.deposit",f"Transferred NPR {payload.amount} from cash drawer to daily savings")
+    db.commit()
+    return dict(row)
+
+
 @router.get("/cash-shifts")
 def list_cash_shifts(limit: int = Query(50, ge=1, le=200),
                      db: Session = Depends(get_db), user=Depends(require_roles(*CASHIERS))):
