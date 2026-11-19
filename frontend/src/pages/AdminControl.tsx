@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { api, apiErrorMessage } from "../api/client";
 
 type Tab = "cash" | "refunds" | "sales" | "suppliers" | "loyalty" | "reports" | "service" | "backup" | "audit" | "settings";
+type AdminControlProps = { visibleTabs?: Tab[]; embedded?: boolean };
 const tabs: { id: Tab; label: string }[] = [
   { id: "cash", label: "Cash drawer" }, { id: "refunds", label: "Refunds" },
   { id: "sales", label: "Manage sales" }, { id: "suppliers", label: "Supplier ledger" }, { id: "loyalty", label: "Loyalty" },
@@ -13,8 +14,9 @@ const primary = "rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white 
 const panel = "rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm";
 const money = (v: any) => "Rs. " + Number(v || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function AdminControl() {
-  const [tab, setTab] = useState<Tab>("cash");
+export default function AdminControl({ visibleTabs, embedded = false }: AdminControlProps) {
+  const availableTabs = visibleTabs ?? tabs.filter((item) => item.id !== "cash" && item.id !== "loyalty").map((item) => item.id);
+  const [tab, setTab] = useState<Tab>(availableTabs[0] ?? "refunds");
   const [data, setData] = useState<any>({ shifts: [], refunds: [], bills: [], suppliers: [], inventory: [], ledger: [], supplierBalances: [], loyalty: [], serviceOrders: [], audit: [] });
   const [shift, setShift] = useState<any>(null);
   const [tax, setTax] = useState<any>({ tax_enabled: true, tax_percent: "14", service_charge_enabled: false, service_charge_percent: "0" });
@@ -58,6 +60,7 @@ export default function AdminControl() {
   };
 
   useEffect(() => { load().catch(() => setError("Could not load administration data.")); }, []);
+  useEffect(() => { if (!availableTabs.includes(tab)) setTab(availableTabs[0] ?? "refunds"); }, [availableTabs.join(","), tab]);
 
   const run = async (action: () => Promise<any>, success: string) => {
     setBusy(true); setError(""); setMessage("");
@@ -246,12 +249,12 @@ export default function AdminControl() {
 
   return <div className="mx-auto max-w-7xl space-y-5">
     <header className="flex flex-wrap items-end justify-between gap-3">
-      <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">Royal Skye · Administration</p><h1 className="mt-1 text-3xl font-bold">Control centre</h1><p className="text-sm text-neutral-500">Financial controls, business configuration, customer rewards and accountability.</p></div>
+      <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">Royal Skye · {embedded ? "Restaurant Operations" : "Administration"}</p><h1 className="mt-1 text-3xl font-bold">{embedded ? (tab === "cash" ? "Cash drawer" : "Loyalty points") : "Control centre"}</h1><p className="text-sm text-neutral-500">{embedded ? "Operational cash and customer points management." : "Financial controls, business configuration and accountability."}</p></div>
       <button className={primary} disabled={busy} onClick={() => load()}>{busy ? "Working…" : "Refresh"}</button>
     </header>
     {message && <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p>}
     {error && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-    <nav className="flex gap-2 overflow-x-auto border-b pb-2">{tabs.map(t => <button key={t.id} onClick={() => setTab(t.id)} className={"shrink-0 rounded-lg px-3 py-2 text-sm font-medium " + (tab === t.id ? "bg-brand text-white" : "bg-white text-neutral-600")}>{t.label}</button>)}</nav>
+    <nav className="flex gap-2 overflow-x-auto border-b pb-2">{tabs.filter((item) => availableTabs.includes(item.id)).map(t => <button key={t.id} onClick={() => setTab(t.id)} className={"shrink-0 rounded-lg px-3 py-2 text-sm font-medium " + (tab === t.id ? "bg-brand text-white" : "bg-white text-neutral-600")}>{t.label}</button>)}</nav>
 
     {tab === "cash" && <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
       <section className={panel}>
