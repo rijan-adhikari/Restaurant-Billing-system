@@ -26,7 +26,7 @@ interface CustomerHistory {
 }
 const staffRoles = ["admin", "manager", "waiter", "cashier"] as const;
 
-export default function Admin() {
+export default function Admin({ embedded = false }: { embedded?: boolean }) {
   const { t } = useLanguage();
   const { role } = useAuth();
   const [categories, setCategories] = useState<Category[]>([]);
@@ -241,7 +241,7 @@ export default function Admin() {
   return (
     <div className="max-w-6xl flex flex-col space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">{t("Master Panel")}</h1>
+        <h1 className="text-2xl font-semibold">{t(embedded ? "Menu & customer management" : "Menu & customer management")}</h1>
         <p className="text-sm text-neutral-500 mt-1">{t("Manage categories, staff, and customers.")}</p>
       </div>
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
