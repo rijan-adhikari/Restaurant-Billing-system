@@ -200,10 +200,10 @@ export default function Admin() {
   };
 
   const removeStaff = async (userId: string) => {
-    if (!window.confirm("Remove this user account? The account will be disabled.")) return;
+    if (!window.confirm("Permanently remove this staff login account? They will no longer be able to sign in. Historical sales and audit records will be preserved.")) return;
     try {
       await api.delete(`/api/users/${userId}`);
-      setMessage("User account removed.");
+      setMessage("Staff login account permanently removed. Historical records have been preserved.");
       await load();
     } catch (e: any) {
       setError(e?.response?.data?.detail || "Could not remove user.");
@@ -261,7 +261,7 @@ export default function Admin() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="text-left border-b"><th className="py-2">{t("Name")}</th><th>{t("Username")}</th><th>{t("Role")}</th><th>{t("Status")}</th><th>{t("Actions")}</th></tr></thead>
-              <tbody>{staff.map((member) => <tr key={member.id} className="border-b last:border-0"><td className="py-2">{member.full_name}</td><td>{member.username}</td><td><select className="border rounded px-2 py-1 capitalize" value={member.role} onChange={(e) => updateStaff(member.id, { role: e.target.value })}>{staffRoles.map((role) => <option key={role} value={role}>{role}</option>)}</select></td><td><button type="button" onClick={() => updateStaff(member.id, { is_active: !member.is_active })} className={member.is_active ? "text-emerald-700" : "text-red-700"}>{member.is_active ? t("Active · disable") : t("Inactive · enable")}</button></td><td><div className="flex gap-2"><button type="button" onClick={() => { setPasswordUserId(member.id); setNewPassword(""); }} className="text-brand">{t("Change password")}</button><button type="button" onClick={() => removeStaff(member.id)} className="text-red-700">{t("Disable")}</button></div>{passwordUserId === member.id && <div className="flex gap-2 mt-2"><input type="password" minLength={8} placeholder={t("New password")} className="border rounded px-2 py-1" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /><button type="button" onClick={() => changePassword(member.id)} className="bg-brand text-white rounded px-2 py-1">{t("Save")}</button></div>}</td></tr>)}</tbody>
+              <tbody>{staff.map((member) => <tr key={member.id} className="border-b last:border-0"><td className="py-2">{member.full_name}</td><td>{member.username}</td><td><select className="border rounded px-2 py-1 capitalize" value={member.role} onChange={(e) => updateStaff(member.id, { role: e.target.value })}>{staffRoles.map((role) => <option key={role} value={role}>{role}</option>)}</select></td><td><button type="button" onClick={() => updateStaff(member.id, { is_active: !member.is_active })} className={member.is_active ? "text-emerald-700" : "text-red-700"}>{member.is_active ? t("Active · disable") : t("Inactive · enable")}</button></td><td><div className="flex gap-2"><button type="button" onClick={() => { setPasswordUserId(member.id); setNewPassword(""); }} className="text-brand">{t("Change password")}</button><button type="button" onClick={() => removeStaff(member.id)} className="text-red-700">{t("Delete permanently")}</button></div>{passwordUserId === member.id && <div className="flex gap-2 mt-2"><input type="password" minLength={8} placeholder={t("New password")} className="border rounded px-2 py-1" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /><button type="button" onClick={() => changePassword(member.id)} className="bg-brand text-white rounded px-2 py-1">{t("Save")}</button></div>}</td></tr>)}</tbody>
             </table>
           </div>
         </div>
