@@ -36,9 +36,9 @@ export default function Billing() {
     ]);
     setOrders(orderResponse.data);
     setCustomers(customerResponse.data);
-    return orderResponse.data as OpenOrder[];
     setLoyaltyEnabled(!!loyaltyResponse.data.enabled);
     setPointValue(Number(loyaltyResponse.data.point_value || 0));
+    return orderResponse.data as OpenOrder[];
   };
 
   useEffect(() => {
