@@ -208,7 +208,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     }
     const taxPercent = Number(tax.tax_percent);
     const servicePercent = Number(tax.service_charge_percent);
-    if (![taxPercent, servicePercent, spendPerPoint, pointValue].every(Number.isFinite)
+    if (![taxPercent, servicePercent].every(Number.isFinite)
         || taxPercent < 0 || taxPercent > 100 || servicePercent < 0 || servicePercent > 100
 ) {
       setError("Check tax and service charge (0–100%).");
