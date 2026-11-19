@@ -42,7 +42,7 @@ export default function Operations() {
       ["inventory", "/api/operations/inventory"], ["recipes", "/api/operations/recipes"],
       ["expenses", "/api/operations/expenses"], ["reservations", "/api/operations/reservations"],
       ["menuItems", "/api/menu-items"], ["tables", "/api/tables"],
-      ...(role === "admin" ? [["staff", "/api/users"], ["attendance", "/api/operations/staff/attendance"], ["payroll", "/api/operations/staff/payroll"]] : []),
+      ...(role === "admin" ? ([["staff", "/api/users"], ["attendance", "/api/operations/staff/attendance"], ["payroll", "/api/operations/staff/payroll"]] as [string, string][]) : []),
     ];
     const results = await Promise.allSettled(requests.map(([, url]) => api.get(url)));
     setData((old: any) => {
