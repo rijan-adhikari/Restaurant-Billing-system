@@ -76,7 +76,7 @@ export default function AdminControl() {
     if (!shift) return;
     const isSavings = cashEntry.entry_type === "daily_savings";
     run(() => api.post(isSavings ? `/api/admin/cash-shifts/${shift.id}/daily-savings` : `/api/admin/cash-shifts/${shift.id}/entries`,
-      isSavings ? { amount: Number(cashEntry.amount), notes: cashEntry.notes } : { ...cashEntry, amount: Number(cashEntry.amount) }),
+      isSavings ? { entry_type: "cash_out", amount: Number(cashEntry.amount), notes: cashEntry.notes } : { ...cashEntry, amount: Number(cashEntry.amount) }),
       isSavings ? "Amount transferred to daily savings." : "Cash movement recorded.");
     setCashEntry({ entry_type: "cash_in", amount: "", reference: "", notes: "" });
   };
