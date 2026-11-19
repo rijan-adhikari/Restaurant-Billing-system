@@ -157,6 +157,59 @@ def list_open_orders(db: Session = Depends(get_db),
     return result
 
 
+
+@router.post("/orders/merge")
+async def merge_orders(payload: schemas.OrderMerge, db: Session = Depends(get_db),
+                       user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager,
+                                                   models.RoleName.cashier))):
+    order_ids = list(dict.fromkeys(payload.order_ids))
+    if len(order_ids) not in (2, 3):
+        raise HTTPException(status_code=422, detail="Select exactly two or three tables to merge")
+
+    orders = db.query(models.Order).filter(models.Order.id.in_(order_ids)).with_for_update().all()
+    if len(orders) != len(order_ids):
+        raise HTTPException(status_code=404, detail="One or more selected orders were not found")
+    if any(order.status != models.OrderStatus.open for order in orders):
+        raise HTTPException(status_code=409, detail="Only open orders can be merged")
+    if any(order.table_id is None or order.table is None for order in orders):
+        raise HTTPException(status_code=400, detail="Only dine-in table orders can be merged")
+
+    for order in orders:
+        service = db.execute(text("SELECT service_type FROM order_service_details WHERE order_id=:id"),
+                             {"id": order.id}).first()
+        if service:
+            raise HTTPException(status_code=400, detail="Takeaway and delivery orders cannot be merged with tables")
+        if db.query(models.Bill).filter(models.Bill.order_id == order.id).first():
+            raise HTTPException(status_code=409, detail="A selected order already has a bill")
+
+    primary = orders[0]
+    source_orders = orders[1:]
+    source_names = [order.table.name for order in orders]
+
+    for source in source_orders:
+        for item in source.items:
+            item.order_id = primary.id
+        for kot in source.kots:
+            kot.order_id = primary.id
+        source.status = models.OrderStatus.cancelled
+        if source.table:
+            source.table.status = models.TableStatus.available
+
+    db.add(models.AuditLog(
+        user_id=user.id,
+        action="orders.merge",
+        details=f"Merged tables {', '.join(source_names)} into table {primary.table.name} under order {primary.order_number}",
+    ))
+    db.commit()
+    await manager.broadcast({"type": "orders_merged", "order_id": primary.id, "table_names": source_names})
+    return {
+        "ok": True,
+        "order_id": primary.id,
+        "order_number": primary.order_number,
+        "table_names": source_names,
+        "message": "Tables merged. Generate one bill for the combined order.",
+    }
+
 @router.patch("/orders/{order_id}/cancel")
 def cancel_order(order_id: str, db: Session = Depends(get_db),
                 user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager,
