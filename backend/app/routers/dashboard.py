@@ -77,9 +77,6 @@ def dashboard_summary(report_date: date | None = None, db: Session = Depends(get
     outstanding = db.query(func.coalesce(func.sum(models.CustomerBalance.remaining_amount), 0)).filter(
         models.CustomerBalance.remaining_amount > 0
     ).scalar()
-    pending_kots = db.query(models.KOT).filter(
-        models.KOT.status.notin_([models.KOTStatus.served, models.KOTStatus.cancelled])
-    ).count()
     occupied_tables = db.query(models.DiningTable).filter(
         models.DiningTable.status == models.TableStatus.occupied
     ).count()
@@ -95,7 +92,6 @@ def dashboard_summary(report_date: date | None = None, db: Session = Depends(get
         "daily_payroll_expense": str(daily_payroll), "monthly_payroll_expense": str(monthly_payroll),
         "yearly_payroll_expense": str(yearly_payroll),
         "outstanding": str(outstanding),
-        "pending_kots": pending_kots,
         "occupied_tables": occupied_tables,
     }
 
@@ -220,7 +216,6 @@ def dashboard_summary_pdf(report_date: date | None = None, db: Session = Depends
         ["Estimated daily profit / loss", f"NPR {summary['daily_profit']}"],
         ["Estimated daily COGS", f"NPR {summary['daily_estimated_cogs']}"],
         ["Outstanding credit", f"NPR {summary['outstanding']}"],
-        ["Pending KOTs", str(summary["pending_kots"])],
         ["Occupied tables", str(summary["occupied_tables"])],
     ]
     story.extend([Paragraph("Dashboard overview", styles["Heading2"]), Table(metrics, repeatRows=1), Spacer(1, 14),
