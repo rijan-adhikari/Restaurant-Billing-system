@@ -296,7 +296,7 @@ def _report_data(start: date, end: date, db: Session):
 
 @router.get("/reports/sales.csv")
 def export_sales_csv(start: date, end: date, db: Session = Depends(get_db),
-                     user=Depends(require_roles(*MANAGERS))):
+                     user=Depends(require_roles(*ADMIN))):
     summary, refunds, payments, items, staff = _report_data(start, end, db)
     import csv
     import io
@@ -326,7 +326,7 @@ def export_sales_csv(start: date, end: date, db: Session = Depends(get_db),
 
 @router.get("/reports/sales.xlsx")
 def export_sales_xlsx(start: date, end: date, db: Session = Depends(get_db),
-                      user=Depends(require_roles(*MANAGERS))):
+                      user=Depends(require_roles(*ADMIN))):
     from openpyxl import Workbook
     summary, refunds, payments, items, staff = _report_data(start, end, db)
     workbook = Workbook()
@@ -358,7 +358,7 @@ def export_sales_xlsx(start: date, end: date, db: Session = Depends(get_db),
 
 @router.get("/reports/sales.pdf")
 def export_sales_pdf(start: date, end: date, db: Session = Depends(get_db),
-                     user=Depends(require_roles(*MANAGERS))):
+                     user=Depends(require_roles(*ADMIN))):
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet
@@ -454,7 +454,7 @@ def _ensure_daily_savings_table(db: Session):
 
 
 @router.get("/daily-savings")
-def list_daily_savings(db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+def list_daily_savings(db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     _ensure_daily_savings_table(db)
     rows = db.execute(text("""SELECT s.id,s.shift_id,s.amount,s.notes,s.created_at,u.full_name created_by_name
         FROM daily_savings s JOIN users u ON u.id=s.created_by ORDER BY s.created_at DESC LIMIT 1000""")).mappings().all()
