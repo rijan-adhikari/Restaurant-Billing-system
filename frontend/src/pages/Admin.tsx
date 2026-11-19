@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import { useLanguage } from "../context/LanguageContext";
+import { useAuth } from "../context/AuthContext";
 
 interface Category { id: string; name: string; }
 interface MenuItem { id: string; category_id: string; name: string; description: string; price: string; destination: string; is_available: boolean; }
@@ -27,6 +28,7 @@ const staffRoles = ["admin", "manager", "waiter", "cashier"] as const;
 
 export default function Admin() {
   const { t } = useLanguage();
+  const { role } = useAuth();
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [menuEditingId, setMenuEditingId] = useState<string | null>(null);
@@ -51,14 +53,14 @@ export default function Admin() {
   const [error, setError] = useState("");
 
   const load = async () => {
-    const [categoryResponse, staffResponse, customerResponse, menuResponse] = await Promise.all([
+    const [categoryResponse, customerResponse, menuResponse, staffResponse] = await Promise.all([
       api.get("/api/categories"),
-      api.get("/api/users"),
       api.get("/api/customers"),
       api.get("/api/menu-items"),
+      role === "admin" ? api.get("/api/users") : Promise.resolve({ data: [] }),
     ]);
     setCategories(categoryResponse.data);
-    setStaff(staffResponse.data);
+    if (role === "admin") setStaff(staffResponse.data);
     setCustomers(customerResponse.data);
     setMenuItems(menuResponse.data);
     if (!menuForm.category_id && categoryResponse.data.length) setMenuForm((current) => ({ ...current, category_id: categoryResponse.data[0].id }));
@@ -245,6 +247,7 @@ export default function Admin() {
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
       </div>
 
+      {role === "admin" && (
       <section className="bg-white rounded-xl shadow p-5">
         <h2 className="font-semibold mb-4">{t("Staff accounts")}</h2>
         <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
@@ -266,6 +269,7 @@ export default function Admin() {
           </div>
         </div>
       </section>
+      )}
 
       <section className="bg-white rounded-xl shadow p-5">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
