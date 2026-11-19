@@ -21,7 +21,7 @@ class UserUpdate(BaseModel):
 
 @router.get("", response_model=list[schemas.UserOut])
 def list_users(db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
-    return db.query(models.User).order_by(models.User.full_name).all()
+    return db.query(models.User).filter(~models.User.username.like("deleted-%")).order_by(models.User.full_name).all()
 
 
 @router.post("", response_model=schemas.UserOut)
@@ -99,6 +99,7 @@ def delete_user(user_id: str, db: Session = Depends(get_db),
 
     # User IDs are referenced by historical transactions. Keep the FK target,
     # but erase login identity and credentials so the account is permanently unusable.
+    original_username = member.username
     deleted_username = f"deleted-{uuid.uuid4().hex}"
     member.username = deleted_username
     member.full_name = "Deleted staff account"
@@ -106,6 +107,6 @@ def delete_user(user_id: str, db: Session = Depends(get_db),
     member.is_active = False
     member.must_change_password = True
     db.add(models.AuditLog(user_id=user.id, action="staff.deleted",
-                           details=f"Permanently removed login account for {deleted_username}"))
+                           details=f"Permanently removed login account for {original_username}"))
     db.commit()
     return {"ok": True, "deleted": True}
