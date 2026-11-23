@@ -140,6 +140,9 @@ class CashRecoveryCreate(BaseModel):
     business_date: date
     opening_float: Decimal = Field(ge=0)
     counted_cash: Decimal = Field(ge=0)
+    cash_in: Decimal = Field(default=Decimal("0"), ge=0)
+    cash_out: Decimal = Field(default=Decimal("0"), ge=0)
+    payout: Decimal = Field(default=Decimal("0"), ge=0)
     notes: str | None = Field(default=None, max_length=1000)
 
 
@@ -576,7 +579,8 @@ def recover_historical_cash_shift(payload: CashRecoveryCreate, db: Session = Dep
         ORDER BY r.created_at,r.id"""), {"day": day}).mappings().all()
     cash_sales = sum((Decimal(str(row["amount"])) for row in sales), Decimal(0))
     cash_refunds = sum((Decimal(str(row["amount"])) for row in refunds), Decimal(0))
-    expected = payload.opening_float + cash_sales - cash_refunds
+    expected = (payload.opening_float + cash_sales + payload.cash_in
+                - cash_refunds - payload.cash_out - payload.payout)
     difference = payload.counted_cash - expected
     marker = f"[historical-recovery:{day.isoformat()}]"
     shift = db.execute(text("""INSERT INTO cash_drawer_shifts
@@ -602,14 +606,25 @@ def recover_historical_cash_shift(payload: CashRecoveryCreate, db: Session = Dep
             {"shift": shift, "amount": row["amount"], "reference": row["bill_number"],
              "notes": f"{marker} Imported from refund {row['refund_id']}: {row['reason']}",
              "user": user.id, "created_at": row["created_at"]})
+    for entry_type, amount in (("cash_in", payload.cash_in), ("cash_out", payload.cash_out), ("payout", payload.payout)):
+        if amount > 0:
+            db.execute(text("""INSERT INTO cash_drawer_entries
+                (shift_id,entry_type,amount,reference,notes,created_by,created_at)
+                VALUES(:shift,:type,:amount,:reference,:notes,:user,
+                    CAST(:day AS date)+INTERVAL '1 day'-INTERVAL '1 second')"""),
+                {"shift": shift, "type": entry_type, "amount": amount,
+                 "reference": "Historical recovery adjustment",
+                 "notes": f"{marker} Manager-entered {entry_type.replace('_', ' ')}. {payload.notes or ''}".strip(),
+                 "user": user.id, "day": day})
     audit(db, user.id, "cash_shift.historical_recovery",
-          f"Recovered {day}: {len(sales)} cash payments NPR {cash_sales}; {len(refunds)} cash refunds NPR {cash_refunds}; opening NPR {payload.opening_float}; expected NPR {expected}; counted NPR {payload.counted_cash}; variance NPR {difference}.")
+          f"Recovered {day}: {len(sales)} cash payments NPR {cash_sales}; {len(refunds)} cash refunds NPR {cash_refunds}; opening NPR {payload.opening_float}; manual cash-in NPR {payload.cash_in}; cash-out NPR {payload.cash_out}; payout NPR {payload.payout}; expected NPR {expected}; counted NPR {payload.counted_cash}; variance NPR {difference}.")
     db.commit()
     return {"ok": True, "shift_id": str(shift), "business_date": day.isoformat(),
             "cash_sales_total": str(cash_sales), "cash_refunds_total": str(cash_refunds),
             "expected_cash": str(expected), "counted_cash": str(payload.counted_cash),
-            "cash_difference": str(difference), "imported_sales": len(sales),
-            "imported_refunds": len(refunds)}
+            "cash_difference": str(difference), "manual_cash_in": str(payload.cash_in),
+            "manual_cash_out": str(payload.cash_out), "manual_payout": str(payload.payout),
+            "imported_sales": len(sales), "imported_refunds": len(refunds)}
 
 
 @router.get("/cash-shifts")
