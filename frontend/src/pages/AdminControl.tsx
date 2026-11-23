@@ -34,6 +34,9 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const [recoveryPreview, setRecoveryPreview] = useState<any>(null);
   const [recoveryFloat, setRecoveryFloat] = useState("0");
   const [recoveryCounted, setRecoveryCounted] = useState("");
+  const [recoveryCashIn, setRecoveryCashIn] = useState("0");
+  const [recoveryCashOut, setRecoveryCashOut] = useState("0");
+  const [recoveryPayout, setRecoveryPayout] = useState("0");
   const [recoveryNotes, setRecoveryNotes] = useState("Cash counter was not opened on the business date.");
   const [cashEntry, setCashEntry] = useState({ entry_type: "cash_in", amount: "", reference: "", notes: "" });
   const [editingCashEntry, setEditingCashEntry] = useState<string | null>(null);
@@ -162,6 +165,9 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
         business_date: recoveryDate,
         opening_float: Number(recoveryFloat),
         counted_cash: Number(recoveryCounted),
+        cash_in: Number(recoveryCashIn),
+        cash_out: Number(recoveryCashOut),
+        payout: Number(recoveryPayout),
         notes: recoveryNotes,
       });
       setMessage(`Historical cash recovery saved for ${response.data.business_date}. Imported ${response.data.imported_sales} cash payments and ${response.data.imported_refunds} cash refunds. Variance: ${money(response.data.cash_difference)}.`);
@@ -373,6 +379,11 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
         </div>
         {recoveryPreview && <form onSubmit={submitCashRecovery} className="mt-4 space-y-3 border-t pt-3">
           <div className="grid gap-3 sm:grid-cols-3">
+            <label className="text-xs">Additional cash-in (NPR)<input type="number" min="0" step="0.01" className={field + " mt-1"} value={recoveryCashIn} onChange={e => setRecoveryCashIn(e.target.value)} /></label>
+            <label className="text-xs">Cash-out / expenses (NPR)<input type="number" min="0" step="0.01" className={field + " mt-1"} value={recoveryCashOut} onChange={e => setRecoveryCashOut(e.target.value)} /></label>
+            <label className="text-xs">Payouts (NPR)<input type="number" min="0" step="0.01" className={field + " mt-1"} value={recoveryPayout} onChange={e => setRecoveryPayout(e.target.value)} /></label>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-lg bg-neutral-50 p-3"><p className="text-xs text-neutral-500">Cash sales · {recoveryPreview.sales.length} payment(s)</p><p className="text-lg font-bold">{money(recoveryPreview.cash_sales_total)}</p></div>
             <div className="rounded-lg bg-neutral-50 p-3"><p className="text-xs text-neutral-500">Cash refunds · {recoveryPreview.refunds.length} refund(s)</p><p className="text-lg font-bold">{money(recoveryPreview.cash_refunds_total)}</p></div>
             <div className="rounded-lg bg-neutral-50 p-3"><p className="text-xs text-neutral-500">Net recorded cash movement</p><p className="text-lg font-bold">{money(recoveryPreview.net_cash_movement)}</p></div>
@@ -385,7 +396,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
             </tbody></table>
           </div>
           <label className="block text-xs">Reconciliation notes<textarea className={field + " mt-1"} rows={2} value={recoveryNotes} onChange={e => setRecoveryNotes(e.target.value)} /></label>
-          <p className="text-xs text-amber-700">Saving creates one closed historical shift, imports each source cash payment/refund once, and records the counted-cash variance. It does not modify bills or QR payments.</p>
+          <p className="text-xs text-amber-700">Enter any additional cash-in, cash-outs/expenses and payouts that were not captured elsewhere. Saving creates one closed historical shift, imports source cash payments/refunds once, and records the counted-cash variance. It does not modify bills or QR payments.</p>
           <button className={primary} disabled={busy || !recoveryCounted.trim() || Number(recoveryFloat) < 0}>Save historical recovery</button>
         </form>}
       </section>}
