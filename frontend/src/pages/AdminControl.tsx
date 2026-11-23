@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { api, apiErrorMessage } from "../api/client";
 
-type Tab = "cash" | "sales" | "suppliers" | "reports" | "service" | "backup" | "audit" | "settings";
+type Tab = "cash" | "payments" | "sales" | "suppliers" | "reports" | "service" | "backup" | "audit" | "settings";
 type AdminControlProps = { visibleTabs?: Tab[]; embedded?: boolean; managerView?: boolean };
 const tabs: { id: Tab; label: string }[] = [
-  { id: "cash", label: "Cash drawer" },
+  { id: "cash", label: "Cash drawer" }, { id: "payments", label: "QR movements" },
   { id: "sales", label: "Manage sales" }, { id: "suppliers", label: "Supplier ledger" },
   { id: "reports", label: "Reports & exports" }, { id: "service", label: "Service orders" }, { id: "backup", label: "Backup & restore" },
   { id: "audit", label: "Audit trail" }, { id: "settings", label: "Business settings" },
@@ -15,7 +15,7 @@ const panel = "rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm";
 const money = (v: any) => "Rs. " + Number(v || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function AdminControl({ visibleTabs, embedded = false, managerView = false }: AdminControlProps) {
-  const roleTabs = managerView ? tabs.filter((item) => ["suppliers", "service"].includes(item.id)) : tabs.filter((item) => item.id !== "cash");
+  const roleTabs = managerView ? tabs.filter((item) => ["suppliers", "service", "payments"].includes(item.id)) : tabs.filter((item) => item.id !== "cash");
   const availableTabs = visibleTabs ?? roleTabs.map((item) => item.id);
   const [tab, setTab] = useState<Tab>(availableTabs[0] ?? "cash");
   const [data, setData] = useState<any>({ shifts: [], refunds: [], bills: [], suppliers: [], inventory: [], ledger: [], supplierBalances: [], loyalty: [], serviceOrders: [], audit: [] });
@@ -24,6 +24,13 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const [restaurant, setRestaurant] = useState<any>({ name: "", email: "", phone: "", address: "", pan: "", vat: "", currency: "NPR", logo_path: "", qr_image_path: "", receipt_footer: "" });
   const [openFloat, setOpenFloat] = useState("0");
   const [countedCash, setCountedCash] = useState("");
+  const [qrFrom, setQrFrom] = useState(new Date().toISOString().slice(0, 8) + "01");
+  const [qrTo, setQrTo] = useState(new Date().toISOString().slice(0, 10));
+  const [recoveryDate, setRecoveryDate] = useState("2026-11-22");
+  const [recoveryPreview, setRecoveryPreview] = useState<any>(null);
+  const [recoveryFloat, setRecoveryFloat] = useState("0");
+  const [recoveryCounted, setRecoveryCounted] = useState("");
+  const [recoveryNotes, setRecoveryNotes] = useState("Cash counter was not opened on the business date.");
   const [cashEntry, setCashEntry] = useState({ entry_type: "cash_in", amount: "", reference: "", notes: "" });
   const [editingCashEntry, setEditingCashEntry] = useState<string | null>(null);
   const [cashEntryEdit, setCashEntryEdit] = useState({ entry_type: "cash_in", amount: "", reference: "", notes: "" });
@@ -42,6 +49,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const load = async () => {
     const requests = [
       ["current", "/api/admin/cash-shifts/current"], ["shifts", "/api/admin/cash-shifts"],
+      ["qrMovements", `/api/admin/qr-movements?start=${qrFrom}&end=${qrTo}`],
       ...(!managerView ? ([["sales", "/api/admin/sales"]] as [string, string][]) : []),
       ["suppliers", "/api/operations/suppliers"], ["inventory", "/api/operations/inventory"], ["ledger", "/api/admin/suppliers/ledger"], ["supplierBalances", "/api/admin/suppliers/balances"],
       ["serviceOrders", "/api/admin/service-orders"],
@@ -117,6 +125,48 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const deleteClosedCashEntry = async (entry: any, shiftId: string) => {
     if (!window.confirm(`Delete the ${entry.entry_type.replace("_"," ")} record for ${money(entry.amount)} from this closed shift? Reconciliation will be recalculated and the action audited.`)) return;
     await run(() => api.delete(`/api/admin/cash-shifts/${shiftId}/entries/${entry.id}/closed-correction`), "Closed shift cash movement deleted and reconciliation recalculated.");
+  };
+
+  const loadQrMovements = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    setBusy(true); setError("");
+    try {
+      const response = await api.get("/api/admin/qr-movements", { params: { start: qrFrom, end: qrTo } });
+      setData((old: any) => ({ ...old, qrMovements: response.data }));
+    } catch (error: any) {
+      setError(apiErrorMessage(error, "QR payment movements could not be loaded."));
+    } finally { setBusy(false); }
+  };
+
+  const previewCashRecovery = async () => {
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const response = await api.get("/api/admin/cash-shifts/recovery-preview", { params: { business_date: recoveryDate } });
+      setRecoveryPreview(response.data);
+    } catch (error: any) {
+      setRecoveryPreview(null);
+      setError(apiErrorMessage(error, "Historical cash recovery preview could not be loaded."));
+    } finally { setBusy(false); }
+  };
+
+  const submitCashRecovery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recoveryPreview || !recoveryCounted.trim()) return;
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const response = await api.post("/api/admin/cash-shifts/recover", {
+        business_date: recoveryDate,
+        opening_float: Number(recoveryFloat),
+        counted_cash: Number(recoveryCounted),
+        notes: recoveryNotes,
+      });
+      setMessage(`Historical cash recovery saved for ${response.data.business_date}. Imported ${response.data.imported_sales} cash payments and ${response.data.imported_refunds} cash refunds. Variance: ${money(response.data.cash_difference)}.`);
+      setRecoveryPreview(null);
+      setRecoveryCounted("");
+      await load();
+    } catch (error: any) {
+      setError(apiErrorMessage(error, "Historical cash recovery failed."));
+    } finally { setBusy(false); }
   };
 
   const addSupplierEntry = (e: React.FormEvent) => {
@@ -242,6 +292,33 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     {error && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
     <nav className="flex gap-2 overflow-x-auto border-b pb-2">{tabs.filter((item) => availableTabs.includes(item.id)).map(t => <button key={t.id} onClick={() => setTab(t.id)} className={"shrink-0 rounded-lg px-3 py-2 text-sm font-medium " + (tab === t.id ? "bg-brand text-white" : "bg-white text-neutral-600")}>{t.label}</button>)}</nav>
 
+
+    {tab === "payments" && <section className={panel}>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div><h2 className="text-lg font-semibold">QR payment movements</h2><p className="text-sm text-neutral-500">Receipts and QR refunds from original POS payment records. These are not physical drawer cash.</p></div>
+        <form onSubmit={loadQrMovements} className="flex flex-wrap items-end gap-2">
+          <label className="text-xs">From<input type="date" className={field + " mt-1"} value={qrFrom} onChange={e => setQrFrom(e.target.value)} /></label>
+          <label className="text-xs">To<input type="date" className={field + " mt-1"} value={qrTo} onChange={e => setQrTo(e.target.value)} /></label>
+          <button className={primary} disabled={busy}>Apply dates</button>
+        </form>
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border p-3"><p className="text-xs text-neutral-500">QR collections</p><p className="mt-1 text-xl font-bold">{money(data.qrMovements?.payments_total)}</p></div>
+        <div className="rounded-xl border p-3"><p className="text-xs text-neutral-500">QR refunds</p><p className="mt-1 text-xl font-bold">{money(data.qrMovements?.refunds_total)}</p></div>
+        <div className="rounded-xl border p-3"><p className="text-xs text-neutral-500">Net QR movement</p><p className="mt-1 text-xl font-bold">{money(data.qrMovements?.net_total)}</p></div>
+      </div>
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Time</th><th>Bill</th><th>Movement</th><th>Staff</th><th>Reference / notes</th><th className="text-right">Amount</th></tr></thead><tbody>
+          {(data.qrMovements?.movements || []).map((movement: any) => <tr key={movement.id + movement.movement_type} className="border-b">
+            <td className="py-2 whitespace-nowrap">{new Date(movement.created_at).toLocaleString()}</td><td className="font-semibold">{movement.bill_number}</td>
+            <td className="capitalize">{movement.movement_type}</td><td>{movement.staff_name}</td><td>{movement.notes || "—"}</td>
+            <td className={"text-right font-semibold " + (movement.movement_type === "refund" ? "text-red-700" : "text-emerald-700")}>{movement.movement_type === "refund" ? "−" : "+"}{money(movement.amount)}</td>
+          </tr>)}
+          {(data.qrMovements?.movements || []).length === 0 && <tr><td colSpan={6} className="py-6 text-center text-neutral-400">No QR movements found for this date range.</td></tr>}
+        </tbody></table>
+      </div>
+    </section>}
+
     {tab === "cash" && <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
       <section className={panel}>
         <h2 className="font-semibold text-lg">Cash drawer session</h2>
@@ -277,6 +354,37 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
         </div>}
         <h2 className="font-semibold text-lg mb-3">Recent shift reconciliation</h2><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Opened</th><th>Staff</th><th>Status</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead><tbody>{data.shifts.map((s: any) => <React.Fragment key={s.id}><tr className="border-b"><td className="py-2">{new Date(s.opened_at).toLocaleString()}</td><td>{s.opened_by_name}</td><td className="capitalize">{s.status}</td><td>{s.expected_cash == null ? "—" : money(s.expected_cash)}</td><td>{s.counted_cash == null ? "—" : money(s.counted_cash)}</td><td className={Number(s.cash_difference) < 0 ? "text-red-700" : "text-emerald-700"}>{s.cash_difference == null ? "—" : money(s.cash_difference)}</td></tr>{(s.cash_entries || []).length > 0 && <tr className="border-b bg-neutral-50"><td colSpan={6} className="p-3"><p className="mb-2 text-xs font-semibold">Cash movements · {s.status === "closed" ? "Manager corrections" : "History"}</p>{s.cash_entries.map((entry: any) => <div key={entry.id} className="flex flex-wrap items-center justify-between gap-2 border-b py-2 text-xs"><span>{new Date(entry.created_at).toLocaleString()} · <b className="capitalize">{entry.entry_type.replace("_"," ")}</b> · {money(entry.amount)} · {entry.reference || entry.notes || "No reference"}</span>{s.status === "closed" && <span className="flex gap-2">{["cash_in","cash_out","payout"].includes(entry.entry_type) && <><button type="button" disabled={busy} onClick={() => correctClosedCashEntry(entry,s.id)} className="rounded border px-2 py-1 font-semibold">Edit</button><button type="button" disabled={busy} onClick={() => deleteClosedCashEntry(entry,s.id)} className="rounded bg-red-700 px-2 py-1 font-semibold text-white">Delete</button></>}{["sale","refund"].includes(entry.entry_type) && <button type="button" disabled={busy} onClick={() => deleteCashEntry(entry,s.id)} className="rounded bg-red-700 px-2 py-1 font-semibold text-white">Delete</button>}</span>}</div>)}</td></tr>}</React.Fragment>)}</tbody></table></div></section>
     </div>}
+
+
+      <section className={panel + " mt-4"}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div><h2 className="text-lg font-semibold">Recover a missed cash-counter day</h2><p className="text-sm text-neutral-500">Rebuild cash sales and cash refunds from original bills and refund records. QR, card and bank-transfer payments are excluded from drawer cash.</p></div>
+          <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Historical reconciliation</span>
+        </div>
+        <div className="mt-3 grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]">
+          <label className="text-xs">Business date<input type="date" className={field + " mt-1"} value={recoveryDate} onChange={e => { setRecoveryDate(e.target.value); setRecoveryPreview(null); }} /></label>
+          <label className="text-xs">Opening float (NPR)<input type="number" min="0" step="0.01" className={field + " mt-1"} value={recoveryFloat} onChange={e => setRecoveryFloat(e.target.value)} /></label>
+          <label className="text-xs">Counted closing cash (NPR)<input type="number" min="0" step="0.01" className={field + " mt-1"} value={recoveryCounted} onChange={e => setRecoveryCounted(e.target.value)} /></label>
+          <button type="button" className={primary + " self-end"} disabled={busy || !recoveryDate} onClick={previewCashRecovery}>Preview recovery</button>
+        </div>
+        {recoveryPreview && <form onSubmit={submitCashRecovery} className="mt-4 space-y-3 border-t pt-3">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg bg-neutral-50 p-3"><p className="text-xs text-neutral-500">Cash sales · {recoveryPreview.sales.length} payment(s)</p><p className="text-lg font-bold">{money(recoveryPreview.cash_sales_total)}</p></div>
+            <div className="rounded-lg bg-neutral-50 p-3"><p className="text-xs text-neutral-500">Cash refunds · {recoveryPreview.refunds.length} refund(s)</p><p className="text-lg font-bold">{money(recoveryPreview.cash_refunds_total)}</p></div>
+            <div className="rounded-lg bg-neutral-50 p-3"><p className="text-xs text-neutral-500">Net recorded cash movement</p><p className="text-lg font-bold">{money(recoveryPreview.net_cash_movement)}</p></div>
+          </div>
+          <div className="max-h-64 overflow-auto rounded-lg border">
+            <table className="w-full text-xs"><thead className="sticky top-0 bg-neutral-50"><tr className="text-left"><th className="p-2">Time</th><th>Bill</th><th>Type</th><th className="text-right">Amount</th></tr></thead><tbody>
+              {recoveryPreview.sales.map((item: any) => <tr key={item.payment_id} className="border-t"><td className="p-2">{new Date(item.created_at).toLocaleTimeString()}</td><td>{item.bill_number}</td><td>Cash sale</td><td className="text-right">{money(item.amount)}</td></tr>)}
+              {recoveryPreview.refunds.map((item: any) => <tr key={item.refund_id} className="border-t"><td className="p-2">{new Date(item.created_at).toLocaleTimeString()}</td><td>{item.bill_number}</td><td>Cash refund</td><td className="text-right text-red-700">−{money(item.amount)}</td></tr>)}
+              {recoveryPreview.sales.length + recoveryPreview.refunds.length === 0 && <tr><td colSpan={4} className="p-4 text-center text-neutral-400">No recorded cash payments or refunds for this date.</td></tr>}
+            </tbody></table>
+          </div>
+          <label className="block text-xs">Reconciliation notes<textarea className={field + " mt-1"} rows={2} value={recoveryNotes} onChange={e => setRecoveryNotes(e.target.value)} /></label>
+          <p className="text-xs text-amber-700">Saving creates one closed historical shift, imports each source cash payment/refund once, and records the counted-cash variance. It does not modify bills or QR payments.</p>
+          <button className={primary} disabled={busy || !recoveryCounted.trim() || Number(recoveryFloat) < 0}>Save historical recovery</button>
+        </form>}
+      </section>
 
     {tab === "sales" && <section className={panel}>
       <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-semibold text-lg">Manage individual sales</h2><p className="text-sm text-neutral-500">Void a sale to retain its audit record, or permanently delete its bill and order. Cash-drawer entries remain for reconciliation; record a refund separately if money was returned.</p></div><button className="rounded-lg border px-3 py-2 text-sm" onClick={() => load().catch(() => setError("Could not refresh sales."))}>Refresh</button></div>
