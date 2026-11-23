@@ -13,6 +13,10 @@ const field = "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 te
 const primary = "rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white disabled:opacity-50";
 const panel = "rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm";
 const money = (v: any) => "Rs. " + Number(v || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const localToday = () => {
+  const d = new Date();
+  return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, "0"), String(d.getDate()).padStart(2, "0")].join("-");
+};
 
 export default function AdminControl({ visibleTabs, embedded = false, managerView = false }: AdminControlProps) {
   const roleTabs = managerView ? tabs.filter((item) => ["suppliers", "service", "payments"].includes(item.id)) : tabs.filter((item) => item.id !== "cash");
@@ -24,8 +28,8 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const [restaurant, setRestaurant] = useState<any>({ name: "", email: "", phone: "", address: "", pan: "", vat: "", currency: "NPR", logo_path: "", qr_image_path: "", receipt_footer: "" });
   const [openFloat, setOpenFloat] = useState("0");
   const [countedCash, setCountedCash] = useState("");
-  const [qrFrom, setQrFrom] = useState(new Date().toISOString().slice(0, 8) + "01");
-  const [qrTo, setQrTo] = useState(new Date().toISOString().slice(0, 10));
+  const [qrFrom, setQrFrom] = useState(localToday().slice(0, 8) + "01");
+  const [qrTo, setQrTo] = useState(localToday());
   const [recoveryDate, setRecoveryDate] = useState("2026-11-22");
   const [recoveryPreview, setRecoveryPreview] = useState<any>(null);
   const [recoveryFloat, setRecoveryFloat] = useState("0");
