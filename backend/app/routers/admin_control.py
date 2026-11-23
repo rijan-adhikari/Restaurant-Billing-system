@@ -136,6 +136,16 @@ class CashEntryUpdate(BaseModel):
     reference: str | None = None
     notes: str | None = None
 
+class CashRecoveryCreate(BaseModel):
+    business_date: date
+    opening_float: Decimal = Field(ge=0)
+    counted_cash: Decimal = Field(ge=0)
+    cash_in: Decimal = Field(default=Decimal("0"), ge=0)
+    cash_out: Decimal = Field(default=Decimal("0"), ge=0)
+    payout: Decimal = Field(default=Decimal("0"), ge=0)
+    notes: str | None = Field(default=None, max_length=1000)
+
+
 
 
 class RefundCreate(BaseModel):
@@ -480,6 +490,141 @@ def add_daily_savings(shift_id: str, payload: CashEntry, db: Session = Depends(g
     audit(db,user.id,"daily_savings.deposit",f"Transferred NPR {payload.amount} from cash drawer to daily savings")
     db.commit()
     return dict(row)
+
+
+
+@router.get("/qr-movements")
+def list_qr_movements(start: date | None = None, end: date | None = None,
+                      db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    if start and end and end < start:
+        raise HTTPException(422, "End date must not precede start date")
+    rows = db.execute(text("""SELECT p.id::text id,b.bill_number,p.amount,p.created_at,
+            u.full_name staff_name,'payment' movement_type,NULL::text notes
+        FROM payments p
+        JOIN bills b ON b.id=p.bill_id
+        JOIN users u ON u.id=p.received_by
+        WHERE p.method='qr'
+          AND (:start IS NULL OR COALESCE(b.business_date,p.created_at::date)>=:start)
+          AND (:end IS NULL OR COALESCE(b.business_date,p.created_at::date)<=:end)
+        UNION ALL
+        SELECT r.id::text id,b.bill_number,r.amount,r.created_at,
+            u.full_name staff_name,'refund' movement_type,r.reason notes
+        FROM bill_refunds r
+        JOIN bills b ON b.id=r.bill_id
+        JOIN users u ON u.id=r.created_by
+        WHERE r.method='qr'
+          AND (:start IS NULL OR r.created_at::date>=:start)
+          AND (:end IS NULL OR r.created_at::date<=:end)
+        ORDER BY created_at DESC LIMIT 1000"""), {"start": start, "end": end}).mappings().all()
+    payments_total = db.execute(text("""SELECT COALESCE(SUM(p.amount),0)
+        FROM payments p JOIN bills b ON b.id=p.bill_id
+        WHERE p.method='qr'
+          AND (:start IS NULL OR COALESCE(b.business_date,p.created_at::date)>=:start)
+          AND (:end IS NULL OR COALESCE(b.business_date,p.created_at::date)<=:end)"""),
+        {"start": start, "end": end}).scalar_one()
+    refunds_total = db.execute(text("""SELECT COALESCE(SUM(r.amount),0)
+        FROM bill_refunds r WHERE r.method='qr'
+          AND (:start IS NULL OR r.created_at::date>=:start)
+          AND (:end IS NULL OR r.created_at::date<=:end)"""),
+        {"start": start, "end": end}).scalar_one()
+    payments_total = Decimal(str(payments_total))
+    refunds_total = Decimal(str(refunds_total))
+    return {"payments_total": str(payments_total), "refunds_total": str(refunds_total),
+            "net_total": str(payments_total - refunds_total), "movements": [dict(row) for row in rows]}
+
+
+@router.get("/cash-shifts/recovery-preview")
+def preview_cash_recovery(business_date: date,
+                          db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    existing = db.execute(text("SELECT id,status FROM cash_drawer_shifts WHERE opened_at::date=:day ORDER BY opened_at DESC LIMIT 1"),
+                           {"day": business_date}).mappings().first()
+    if existing:
+        raise HTTPException(409, f"A cash drawer shift already exists for {business_date} ({existing['status']}). Review it instead of importing twice.")
+    sales = db.execute(text("""SELECT p.id::text payment_id,b.id::text bill_id,b.bill_number,
+            p.amount,p.created_at,u.full_name received_by
+        FROM payments p JOIN bills b ON b.id=p.bill_id
+        JOIN users u ON u.id=p.received_by
+        WHERE p.method='cash' AND b.business_date=:day AND b.sale_status='active'
+        ORDER BY p.created_at,p.id"""), {"day": business_date}).mappings().all()
+    refunds = db.execute(text("""SELECT r.id::text refund_id,b.bill_number,r.amount,r.created_at,
+            r.reason,u.full_name refunded_by
+        FROM bill_refunds r JOIN bills b ON b.id=r.bill_id
+        JOIN users u ON u.id=r.created_by
+        WHERE r.method='cash' AND r.created_at::date=:day
+        ORDER BY r.created_at,r.id"""), {"day": business_date}).mappings().all()
+    cash_sales = sum((Decimal(str(row["amount"])) for row in sales), Decimal(0))
+    cash_refunds = sum((Decimal(str(row["amount"])) for row in refunds), Decimal(0))
+    return {"business_date": business_date.isoformat(), "cash_sales_total": str(cash_sales),
+            "cash_refunds_total": str(cash_refunds), "net_cash_movement": str(cash_sales-cash_refunds),
+            "sales": [dict(row) for row in sales], "refunds": [dict(row) for row in refunds]}
+
+
+@router.post("/cash-shifts/recover")
+def recover_historical_cash_shift(payload: CashRecoveryCreate, db: Session = Depends(get_db),
+                                  user=Depends(require_roles(*MANAGERS))):
+    day = payload.business_date
+    db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
+               {"lock_key": f"cash-recovery:{day.isoformat()}"})
+    existing = db.execute(text("SELECT id,status FROM cash_drawer_shifts WHERE opened_at::date=:day FOR UPDATE"),
+                          {"day": day}).mappings().first()
+    if existing:
+        raise HTTPException(409, f"A cash drawer shift already exists for {day}; no recovery was imported.")
+    sales = db.execute(text("""SELECT p.id::text payment_id,b.bill_number,p.amount,p.created_at
+        FROM payments p JOIN bills b ON b.id=p.bill_id
+        WHERE p.method='cash' AND b.business_date=:day AND b.sale_status='active'
+        ORDER BY p.created_at,p.id"""), {"day": day}).mappings().all()
+    refunds = db.execute(text("""SELECT r.id::text refund_id,b.bill_number,r.amount,r.created_at,r.reason
+        FROM bill_refunds r JOIN bills b ON b.id=r.bill_id
+        WHERE r.method='cash' AND r.created_at::date=:day
+        ORDER BY r.created_at,r.id"""), {"day": day}).mappings().all()
+    cash_sales = sum((Decimal(str(row["amount"])) for row in sales), Decimal(0))
+    cash_refunds = sum((Decimal(str(row["amount"])) for row in refunds), Decimal(0))
+    expected = (payload.opening_float + cash_sales + payload.cash_in
+                - cash_refunds - payload.cash_out - payload.payout)
+    difference = payload.counted_cash - expected
+    marker = f"[historical-recovery:{day.isoformat()}]"
+    shift = db.execute(text("""INSERT INTO cash_drawer_shifts
+        (opened_by,opening_float,notes,status,opened_at,closed_by,closed_at,expected_cash,counted_cash,cash_difference)
+        VALUES(:user,:opening,:notes,'closed',CAST(:day AS date),:user,
+            CAST(:day AS date)+INTERVAL '1 day'-INTERVAL '1 second',
+            :expected,:counted,:difference) RETURNING id"""),
+        {"user": user.id, "opening": payload.opening_float,
+         "notes": marker + (("\n" + payload.notes.strip()) if payload.notes and payload.notes.strip() else ""),
+         "day": day, "expected": expected, "counted": payload.counted_cash,
+         "difference": difference}).scalar_one()
+    for row in sales:
+        db.execute(text("""INSERT INTO cash_drawer_entries
+            (shift_id,entry_type,amount,reference,notes,created_by,created_at)
+            VALUES(:shift,'sale',:amount,:reference,:notes,:user,:created_at)"""),
+            {"shift": shift, "amount": row["amount"], "reference": row["bill_number"],
+             "notes": f"{marker} Imported from payment {row['payment_id']}",
+             "user": user.id, "created_at": row["created_at"]})
+    for row in refunds:
+        db.execute(text("""INSERT INTO cash_drawer_entries
+            (shift_id,entry_type,amount,reference,notes,created_by,created_at)
+            VALUES(:shift,'refund',:amount,:reference,:notes,:user,:created_at)"""),
+            {"shift": shift, "amount": row["amount"], "reference": row["bill_number"],
+             "notes": f"{marker} Imported from refund {row['refund_id']}: {row['reason']}",
+             "user": user.id, "created_at": row["created_at"]})
+    for entry_type, amount in (("cash_in", payload.cash_in), ("cash_out", payload.cash_out), ("payout", payload.payout)):
+        if amount > 0:
+            db.execute(text("""INSERT INTO cash_drawer_entries
+                (shift_id,entry_type,amount,reference,notes,created_by,created_at)
+                VALUES(:shift,:type,:amount,:reference,:notes,:user,
+                    CAST(:day AS date)+INTERVAL '1 day'-INTERVAL '1 second')"""),
+                {"shift": shift, "type": entry_type, "amount": amount,
+                 "reference": "Historical recovery adjustment",
+                 "notes": f"{marker} Manager-entered {entry_type.replace('_', ' ')}. {payload.notes or ''}".strip(),
+                 "user": user.id, "day": day})
+    audit(db, user.id, "cash_shift.historical_recovery",
+          f"Recovered {day}: {len(sales)} cash payments NPR {cash_sales}; {len(refunds)} cash refunds NPR {cash_refunds}; opening NPR {payload.opening_float}; manual cash-in NPR {payload.cash_in}; cash-out NPR {payload.cash_out}; payout NPR {payload.payout}; expected NPR {expected}; counted NPR {payload.counted_cash}; variance NPR {difference}.")
+    db.commit()
+    return {"ok": True, "shift_id": str(shift), "business_date": day.isoformat(),
+            "cash_sales_total": str(cash_sales), "cash_refunds_total": str(cash_refunds),
+            "expected_cash": str(expected), "counted_cash": str(payload.counted_cash),
+            "cash_difference": str(difference), "manual_cash_in": str(payload.cash_in),
+            "manual_cash_out": str(payload.cash_out), "manual_payout": str(payload.payout),
+            "imported_sales": len(sales), "imported_refunds": len(refunds)}
 
 
 @router.get("/cash-shifts")
