@@ -513,8 +513,19 @@ def list_qr_movements(start: date | None = None, end: date | None = None,
           AND (:start IS NULL OR r.created_at::date>=:start)
           AND (:end IS NULL OR r.created_at::date<=:end)
         ORDER BY created_at DESC LIMIT 1000"""), {"start": start, "end": end}).mappings().all()
-    payments_total = sum((Decimal(str(row["amount"])) for row in rows if row["movement_type"] == "payment"), Decimal(0))
-    refunds_total = sum((Decimal(str(row["amount"])) for row in rows if row["movement_type"] == "refund"), Decimal(0))
+    payments_total = db.execute(text("""SELECT COALESCE(SUM(p.amount),0)
+        FROM payments p JOIN bills b ON b.id=p.bill_id
+        WHERE p.method='qr'
+          AND (:start IS NULL OR COALESCE(b.business_date,p.created_at::date)>=:start)
+          AND (:end IS NULL OR COALESCE(b.business_date,p.created_at::date)<=:end)"""),
+        {"start": start, "end": end}).scalar_one()
+    refunds_total = db.execute(text("""SELECT COALESCE(SUM(r.amount),0)
+        FROM bill_refunds r WHERE r.method='qr'
+          AND (:start IS NULL OR r.created_at::date>=:start)
+          AND (:end IS NULL OR r.created_at::date<=:end)"""),
+        {"start": start, "end": end}).scalar_one()
+    payments_total = Decimal(str(payments_total))
+    refunds_total = Decimal(str(refunds_total))
     return {"payments_total": str(payments_total), "refunds_total": str(refunds_total),
             "net_total": str(payments_total - refunds_total), "movements": [dict(row) for row in rows]}
 
@@ -549,6 +560,8 @@ def preview_cash_recovery(business_date: date,
 def recover_historical_cash_shift(payload: CashRecoveryCreate, db: Session = Depends(get_db),
                                   user=Depends(require_roles(*MANAGERS))):
     day = payload.business_date
+    db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
+               {"lock_key": f"cash-recovery:{day.isoformat()}"})
     existing = db.execute(text("SELECT id,status FROM cash_drawer_shifts WHERE opened_at::date=:day FOR UPDATE"),
                           {"day": day}).mappings().first()
     if existing:
