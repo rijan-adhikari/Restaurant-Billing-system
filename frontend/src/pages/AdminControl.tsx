@@ -356,7 +356,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     </div>}
 
 
-      <section className={panel + " mt-4"}>
+    {tab === "cash" && <section className={panel + " mt-4"}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div><h2 className="text-lg font-semibold">Recover a missed cash-counter day</h2><p className="text-sm text-neutral-500">Rebuild cash sales and cash refunds from original bills and refund records. QR, card and bank-transfer payments are excluded from drawer cash.</p></div>
           <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Historical reconciliation</span>
@@ -384,7 +384,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
           <p className="text-xs text-amber-700">Saving creates one closed historical shift, imports each source cash payment/refund once, and records the counted-cash variance. It does not modify bills or QR payments.</p>
           <button className={primary} disabled={busy || !recoveryCounted.trim() || Number(recoveryFloat) < 0}>Save historical recovery</button>
         </form>}
-      </section>
+      </section>}
 
     {tab === "sales" && <section className={panel}>
       <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-semibold text-lg">Manage individual sales</h2><p className="text-sm text-neutral-500">Void a sale to retain its audit record, or permanently delete its bill and order. Cash-drawer entries remain for reconciliation; record a refund separately if money was returned.</p></div><button className="rounded-lg border px-3 py-2 text-sm" onClick={() => load().catch(() => setError("Could not refresh sales."))}>Refresh</button></div>
